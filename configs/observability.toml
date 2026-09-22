@@ -1,0 +1,5 @@
+[observability]
+log_level = "info"
+json_logs = true
+trace_sample_rate = 1.0
+allow_plate_debug = false

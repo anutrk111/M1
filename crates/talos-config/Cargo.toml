@@ -1,0 +1,12 @@
+[package]
+name = "talos-config"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "M01 layered configuration (TOML + TALOS__ env)"
+
+[dependencies]
+talos-types = { workspace = true }
+serde = { workspace = true }
+figment = { workspace = true }
+thiserror = { workspace = true }

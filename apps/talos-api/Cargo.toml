@@ -1,0 +1,18 @@
+[package]
+name = "talos-api"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Talos-RS API gateway (M01 health spine; intake later)"
+
+[[bin]]
+name = "talos-api"
+path = "src/main.rs"
+
+[dependencies]
+talos-core = { workspace = true }
+talos-config = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+anyhow = { workspace = true }
+axum = { workspace = true }

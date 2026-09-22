@@ -1,0 +1,8 @@
+[package]
+name = "observability"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "M01 metric and log field name conventions"
+
+[dependencies]

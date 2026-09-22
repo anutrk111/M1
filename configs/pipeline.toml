@@ -1,0 +1,14 @@
+[pipeline]
+# Global default; per-stage overrides optional.
+default_backend = "fixture"
+
+[pipeline.stages]
+# fixture | ai_api | local_gpu_ext
+s0 = "fixture"
+s1 = "fixture"
+s2 = "fixture"
+s3 = "fixture"
+s4 = "fixture"
+s5 = "fixture"
+s6 = "fixture"
+s7 = "fixture"

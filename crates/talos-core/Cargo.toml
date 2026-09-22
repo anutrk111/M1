@@ -1,0 +1,27 @@
+[package]
+name = "talos-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "M01 pipeline framework, errors, runtime lifecycle, and utilities"
+
+[dependencies]
+talos-types = { workspace = true }
+talos-config = { workspace = true }
+observability = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+async-trait = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+sha2 = { workspace = true }
+blake3 = { workspace = true }
+ulid = { workspace = true }
+chrono = { workspace = true }
+hex = { workspace = true }
+axum = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["test-util", "macros", "rt-multi-thread"] }

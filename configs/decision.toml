@@ -1,0 +1,5 @@
+[decision]
+auto_approve_min = 0.90
+secondary_min = 0.80
+hard_fail_on_grammar = true
+hard_fail_on_no_plate = true
