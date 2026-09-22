@@ -19,7 +19,20 @@ pub struct IntakeConfig {
     pub max_zip_entries: u32,
     pub fail_on_empty_batch: bool,
     pub fail_batch_on_metadata_errors: bool,
+    /// When true, any `FailedSink` frame causes the batch to return `Err`.
+    /// Default false: batch returns `Ok` with [`BatchOutcome::PartialFailure`](crate::BatchOutcome::PartialFailure).
+    #[serde(default = "default_fail_batch_on_sink_errors")]
+    pub fail_batch_on_sink_errors: bool,
     pub allowed_extensions: Vec<String>,
+    /// Decode-time width cap (pixels).
+    #[serde(default = "default_max_width")]
+    pub max_width: u32,
+    /// Decode-time height cap (pixels).
+    #[serde(default = "default_max_height")]
+    pub max_height: u32,
+    /// Decode-time pixel budget (`width * height`).
+    #[serde(default = "default_max_pixel_count")]
+    pub max_pixel_count: u64,
 }
 
 fn default_max_uncompressed_zip_bytes() -> u64 {
@@ -28,6 +41,22 @@ fn default_max_uncompressed_zip_bytes() -> u64 {
 
 fn default_max_zip_entries() -> u32 {
     50_000
+}
+
+fn default_fail_batch_on_sink_errors() -> bool {
+    false
+}
+
+fn default_max_width() -> u32 {
+    8192
+}
+
+fn default_max_height() -> u32 {
+    8192
+}
+
+fn default_max_pixel_count() -> u64 {
+    25_000_000
 }
 
 impl Default for IntakeConfig {
@@ -41,7 +70,11 @@ impl Default for IntakeConfig {
             max_zip_entries: default_max_zip_entries(),
             fail_on_empty_batch: true,
             fail_batch_on_metadata_errors: false,
+            fail_batch_on_sink_errors: default_fail_batch_on_sink_errors(),
             allowed_extensions: vec!["jpg".into(), "jpeg".into(), "png".into()],
+            max_width: default_max_width(),
+            max_height: default_max_height(),
+            max_pixel_count: default_max_pixel_count(),
         }
     }
 }
@@ -98,6 +131,10 @@ allowed_extensions = ["jpg", "png"]
         let cfg = load_intake_config(Some(dir.path())).unwrap();
         assert_eq!(cfg.max_images_per_batch, 42);
         assert_eq!(cfg.max_image_bytes, 500);
+        assert!(!cfg.fail_batch_on_sink_errors);
+        assert_eq!(cfg.max_width, 8192);
+        assert_eq!(cfg.max_height, 8192);
+        assert_eq!(cfg.max_pixel_count, 25_000_000);
         assert!(cfg.extension_allowed("JPG"));
         assert!(!cfg.extension_allowed("gif"));
     }

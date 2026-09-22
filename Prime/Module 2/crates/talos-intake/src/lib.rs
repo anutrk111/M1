@@ -15,6 +15,6 @@ pub use config::{load_intake_config, IntakeConfig};
 pub use pipeline::{import_folder, import_zip, ImportResult};
 pub use sink::{FailingFrameSink, FrameSink, InMemoryFrameSink};
 pub use types::{
-    BatchCounts, BatchManifest, DuplicateReference, FrameRecord, ImportRequest, IntakeStatus,
-    MetadataRecord,
+    BatchCounts, BatchManifest, BatchOutcome, DuplicateReference, FrameRecord, ImportRequest,
+    IntakeStatus, MetadataRecord,
 };

@@ -1,31 +1,41 @@
 //! Integration tests for M02 batch & file intake.
 
 use std::fs;
-use std::io::Write;
+use std::io::{Cursor, Write};
 use std::path::PathBuf;
 use std::sync::Arc;
 use talos_core::util::sha256_hex;
 use talos_intake::{
-    import_folder, import_zip, load_intake_config, FailingFrameSink, InMemoryFrameSink,
-    IntakeConfig, IntakeStatus,
+    import_folder, import_zip, load_intake_config, BatchOutcome, FailingFrameSink,
+    InMemoryFrameSink, IntakeConfig, IntakeStatus,
 };
 use zip::write::SimpleFileOptions;
 use zip::ZipWriter;
 
-fn tiny_jpeg() -> Vec<u8> {
-    // Minimal JPEG SOI + APP0-ish + EOI (enough for magic sniff)
-    let mut v = vec![0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10];
-    v.extend_from_slice(b"JFIF");
-    v.extend_from_slice(&[0x00, 0x01, 0x01, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00]);
-    v.extend_from_slice(&[0xFF, 0xD9]);
-    v
+fn valid_jpeg() -> Vec<u8> {
+    valid_jpeg_with_pixel(RgbPixel(200, 40, 40))
 }
 
-fn tiny_png() -> Vec<u8> {
-    let mut v = vec![0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A];
-    v.extend_from_slice(&[0, 0, 0, 0]); // pad
-    v
+fn valid_jpeg_with_pixel(pixel: RgbPixel) -> Vec<u8> {
+    use image::{ImageBuffer, ImageFormat, Rgb};
+    let img = ImageBuffer::from_pixel(16, 16, Rgb([pixel.0, pixel.1, pixel.2]));
+    let mut buf = Vec::new();
+    img.write_to(&mut Cursor::new(&mut buf), ImageFormat::Jpeg)
+        .unwrap();
+    buf
 }
+
+fn valid_png() -> Vec<u8> {
+    use image::{ImageBuffer, ImageFormat, Rgba};
+    let img = ImageBuffer::from_pixel(16, 16, Rgba([10u8, 20, 30, 255]));
+    let mut buf = Vec::new();
+    img.write_to(&mut Cursor::new(&mut buf), ImageFormat::Png)
+        .unwrap();
+    buf
+}
+
+#[derive(Clone, Copy)]
+struct RgbPixel(u8, u8, u8);
 
 fn cfg_with_staging(dir: &std::path::Path) -> IntakeConfig {
     IntakeConfig {
@@ -41,12 +51,11 @@ async fn accepts_jpg_jpeg_png() {
     let tmp = tempfile::tempdir().unwrap();
     let root = tmp.path().join("batch");
     fs::create_dir_all(root.join("cam")).unwrap();
-    let jpeg_a = tiny_jpeg();
-    let mut jpeg_b = tiny_jpeg();
-    jpeg_b.push(0xAA);
+    let jpeg_a = valid_jpeg_with_pixel(RgbPixel(1, 2, 3));
+    let jpeg_b = valid_jpeg_with_pixel(RgbPixel(4, 5, 6));
     fs::write(root.join("cam/a.JPG"), jpeg_a).unwrap();
     fs::write(root.join("cam/b.jpeg"), jpeg_b).unwrap();
-    fs::write(root.join("cam/c.png"), tiny_png()).unwrap();
+    fs::write(root.join("cam/c.png"), valid_png()).unwrap();
 
     let sink = Arc::new(InMemoryFrameSink::new());
     let cfg = cfg_with_staging(tmp.path());
@@ -54,6 +63,7 @@ async fn accepts_jpg_jpeg_png() {
         .await
         .unwrap();
     assert_eq!(res.manifest.counts.accepted, 3);
+    assert_eq!(res.outcome, BatchOutcome::Complete);
     assert!(res.manifest.reconcile_ok());
     assert_eq!(sink.len().await, 3);
 }
@@ -64,7 +74,7 @@ async fn unsupported_file_classified_not_accepted() {
     let root = tmp.path().join("batch");
     fs::create_dir_all(&root).unwrap();
     fs::write(root.join("note.txt"), b"hello").unwrap();
-    fs::write(root.join("ok.jpg"), tiny_jpeg()).unwrap();
+    fs::write(root.join("ok.jpg"), valid_jpeg()).unwrap();
 
     let sink = Arc::new(InMemoryFrameSink::new());
     let cfg = cfg_with_staging(tmp.path());
@@ -73,7 +83,9 @@ async fn unsupported_file_classified_not_accepted() {
         .unwrap();
     assert_eq!(res.manifest.counts.ignored_unsupported, 1);
     assert_eq!(res.manifest.counts.accepted, 1);
-    assert_eq!(res.manifest.counts.discovered, 1);
+    assert_eq!(res.manifest.counts.image_candidates_discovered, 1);
+    assert_eq!(res.manifest.counts.filesystem_entries_seen, 2);
+    assert!(res.manifest.reconcile_ok());
 }
 
 #[tokio::test]
@@ -90,17 +102,98 @@ async fn corrupt_image_rejected() {
 }
 
 #[tokio::test]
+async fn fake_magic_rejected() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path().join("batch");
+    fs::create_dir_all(&root).unwrap();
+    let mut fake = vec![0xFF, 0xD8, 0xFF, 0xE0];
+    fake.extend_from_slice(b"JFIF\0not-a-real-jpeg-body");
+    fs::write(root.join("fake.jpg"), &fake).unwrap();
+
+    let sink = Arc::new(InMemoryFrameSink::new());
+    let mut cfg = cfg_with_staging(tmp.path());
+    cfg.fail_on_empty_batch = false;
+    let res = import_folder(&root, &cfg, sink, None).await.unwrap();
+    assert_eq!(res.manifest.counts.rejected, 1);
+    assert_eq!(
+        res.manifest.frames[0].intake_status,
+        IntakeStatus::RejectedPermanent
+    );
+    assert_eq!(res.outcome, BatchOutcome::PartialFailure);
+}
+
+#[tokio::test]
+async fn truncated_image_rejected() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path().join("batch");
+    fs::create_dir_all(&root).unwrap();
+    let mut bytes = valid_jpeg();
+    bytes.truncate(bytes.len() / 3);
+    fs::write(root.join("trunc.jpg"), &bytes).unwrap();
+
+    let sink = Arc::new(InMemoryFrameSink::new());
+    let mut cfg = cfg_with_staging(tmp.path());
+    cfg.fail_on_empty_batch = false;
+    let res = import_folder(&root, &cfg, sink, None).await.unwrap();
+    assert_eq!(res.manifest.counts.rejected, 1);
+    assert_eq!(
+        res.manifest.frames[0].intake_status,
+        IntakeStatus::RejectedPermanent
+    );
+}
+
+#[tokio::test]
+async fn accounting_invariants() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path().join("batch");
+    fs::create_dir_all(root.join("cam")).unwrap();
+    fs::write(
+        root.join("cam/a.jpg"),
+        valid_jpeg_with_pixel(RgbPixel(1, 0, 0)),
+    )
+    .unwrap();
+    fs::write(
+        root.join("cam/b.jpg"),
+        valid_jpeg_with_pixel(RgbPixel(2, 0, 0)),
+    )
+    .unwrap();
+    fs::write(root.join("readme.txt"), b"notes").unwrap();
+    fs::write(root.join("meta.csv"), b"relative_path\n").unwrap();
+
+    let sink = Arc::new(InMemoryFrameSink::new());
+    let cfg = cfg_with_staging(tmp.path());
+    let res = import_folder(&root, &cfg, sink, None).await.unwrap();
+    let c = &res.manifest.counts;
+    assert_eq!(c.filesystem_entries_seen, 4);
+    assert_eq!(c.image_candidates_discovered, 2);
+    assert_eq!(c.ignored_unsupported, 2);
+    assert_eq!(
+        c.image_candidates_discovered,
+        c.accepted + c.rejected + c.skipped_duplicate + c.failed_sink
+    );
+    assert_eq!(
+        c.filesystem_entries_seen,
+        c.image_candidates_discovered + c.ignored_unsupported
+    );
+    assert!(res.manifest.reconcile_ok());
+}
+
+#[tokio::test]
 async fn deterministic_traversal_order() {
     let tmp = tempfile::tempdir().unwrap();
     let root = tmp.path().join("batch");
     fs::create_dir_all(root.join("z")).unwrap();
     fs::create_dir_all(root.join("a")).unwrap();
-    fs::write(root.join("z/2.jpg"), tiny_jpeg()).unwrap();
-    fs::write(root.join("a/1.jpg"), tiny_jpeg()).unwrap();
-    // Distinct bytes so not duplicates
-    let mut j2 = tiny_jpeg();
-    j2.push(0x01);
-    fs::write(root.join("z/2.jpg"), &j2).unwrap();
+    fs::write(
+        root.join("a/1.jpg"),
+        valid_jpeg_with_pixel(RgbPixel(10, 0, 0)),
+    )
+    .unwrap();
+    fs::write(
+        root.join("z/2.jpg"),
+        valid_jpeg_with_pixel(RgbPixel(20, 0, 0)),
+    )
+    .unwrap();
 
     let sink = Arc::new(InMemoryFrameSink::new());
     let cfg = cfg_with_staging(tmp.path());
@@ -120,7 +213,7 @@ async fn sha256_and_bytes_immutable() {
     let tmp = tempfile::tempdir().unwrap();
     let root = tmp.path().join("batch");
     fs::create_dir_all(&root).unwrap();
-    let bytes = tiny_jpeg();
+    let bytes = valid_jpeg();
     let expected = sha256_hex(&bytes);
     fs::write(root.join("x.jpg"), &bytes).unwrap();
 
@@ -135,7 +228,7 @@ async fn sha256_and_bytes_immutable() {
     let after = fs::read(root.join("x.jpg")).unwrap();
     assert_eq!(after, bytes);
     assert_eq!(sha256_hex(&after), expected);
-    let _ = res;
+    assert_eq!(res.outcome, BatchOutcome::Complete);
 }
 
 #[tokio::test]
@@ -144,7 +237,7 @@ async fn duplicate_references_original_frame_id() {
     let root = tmp.path().join("batch");
     fs::create_dir_all(root.join("a")).unwrap();
     fs::create_dir_all(root.join("b")).unwrap();
-    let bytes = tiny_jpeg();
+    let bytes = valid_jpeg();
     fs::write(root.join("a/one.jpg"), &bytes).unwrap();
     fs::write(root.join("b/two.jpg"), &bytes).unwrap();
 
@@ -156,6 +249,7 @@ async fn duplicate_references_original_frame_id() {
     assert_eq!(res.manifest.counts.accepted, 1);
     assert_eq!(res.manifest.counts.skipped_duplicate, 1);
     assert_eq!(sink.len().await, 1);
+    assert_eq!(res.outcome, BatchOutcome::Complete);
 
     let accepted = res
         .manifest
@@ -179,7 +273,7 @@ async fn csv_metadata_join_by_relative_path() {
     let tmp = tempfile::tempdir().unwrap();
     let root = tmp.path().join("batch");
     fs::create_dir_all(root.join("cam01")).unwrap();
-    fs::write(root.join("cam01/img_0001.jpg"), tiny_jpeg()).unwrap();
+    fs::write(root.join("cam01/img_0001.jpg"), valid_jpeg()).unwrap();
     let csv_path = tmp.path().join("meta.csv");
     let mut f = fs::File::create(&csv_path).unwrap();
     writeln!(
@@ -196,6 +290,8 @@ async fn csv_metadata_join_by_relative_path() {
     let env = &sink.envelopes().await[0];
     assert_eq!(env.metadata.camera_id.as_ref().unwrap().as_str(), "CAM-01");
     assert_eq!(env.metadata.location.as_deref(), Some("Raipur"));
+    // Sidecar outside root is not counted in filesystem_entries_seen
+    assert_eq!(res.manifest.counts.filesystem_entries_seen, 1);
     assert!(res.manifest.reconcile_ok());
 }
 
@@ -205,9 +301,8 @@ async fn basename_fallback_and_ambiguous() {
     let root = tmp.path().join("batch");
     fs::create_dir_all(root.join("a")).unwrap();
     fs::create_dir_all(root.join("b")).unwrap();
-    let j1 = tiny_jpeg();
-    let mut j2 = tiny_jpeg();
-    j2.push(2);
+    let j1 = valid_jpeg_with_pixel(RgbPixel(1, 1, 1));
+    let j2 = valid_jpeg_with_pixel(RgbPixel(2, 2, 2));
     fs::write(root.join("a/same.jpg"), &j1).unwrap();
     fs::write(root.join("b/same.jpg"), &j2).unwrap();
 
@@ -236,7 +331,7 @@ async fn malformed_metadata_row_warns() {
     let tmp = tempfile::tempdir().unwrap();
     let root = tmp.path().join("batch");
     fs::create_dir_all(&root).unwrap();
-    fs::write(root.join("ok.jpg"), tiny_jpeg()).unwrap();
+    fs::write(root.join("ok.jpg"), valid_jpeg()).unwrap();
     let csv_path = tmp.path().join("meta.csv");
     let mut f = fs::File::create(&csv_path).unwrap();
     writeln!(f, "relative_path,captured_at\nok.jpg,NOT-A-TIMESTAMP\n").unwrap();
@@ -255,7 +350,7 @@ async fn missing_metadata_ok() {
     let tmp = tempfile::tempdir().unwrap();
     let root = tmp.path().join("batch");
     fs::create_dir_all(&root).unwrap();
-    fs::write(root.join("ok.jpg"), tiny_jpeg()).unwrap();
+    fs::write(root.join("ok.jpg"), valid_jpeg()).unwrap();
     let sink = Arc::new(InMemoryFrameSink::new());
     let cfg = cfg_with_staging(tmp.path());
     let res = import_folder(&root, &cfg, sink.clone(), None)
@@ -280,7 +375,8 @@ fn write_zip(path: &PathBuf, entries: &[(&str, &[u8])]) {
 async fn zip_import_ok() {
     let tmp = tempfile::tempdir().unwrap();
     let zip_path = tmp.path().join("b.zip");
-    write_zip(&zip_path, &[("cam/x.jpg", &tiny_jpeg())]);
+    let jpeg = valid_jpeg();
+    write_zip(&zip_path, &[("cam/x.jpg", &jpeg)]);
 
     let sink = Arc::new(InMemoryFrameSink::new());
     let cfg = cfg_with_staging(tmp.path());
@@ -295,7 +391,8 @@ async fn zip_import_ok() {
 async fn zip_slip_rejected() {
     let tmp = tempfile::tempdir().unwrap();
     let zip_path = tmp.path().join("evil.zip");
-    write_zip(&zip_path, &[("../escape.jpg", &tiny_jpeg())]);
+    let jpeg = valid_jpeg();
+    write_zip(&zip_path, &[("../escape.jpg", &jpeg)]);
 
     let sink = Arc::new(InMemoryFrameSink::new());
     let cfg = cfg_with_staging(tmp.path());
@@ -311,7 +408,8 @@ async fn zip_slip_rejected() {
 async fn zip_absolute_rejected() {
     let tmp = tempfile::tempdir().unwrap();
     let zip_path = tmp.path().join("abs.zip");
-    write_zip(&zip_path, &[("/tmp/abs.jpg", &tiny_jpeg())]);
+    let jpeg = valid_jpeg();
+    write_zip(&zip_path, &[("/tmp/abs.jpg", &jpeg)]);
 
     let sink = Arc::new(InMemoryFrameSink::new());
     let cfg = cfg_with_staging(tmp.path());
@@ -320,19 +418,21 @@ async fn zip_absolute_rejected() {
 }
 
 #[tokio::test]
-async fn sink_failure_propagates_as_failed_sink() {
+async fn sink_failure_partial_failure_outcome() {
     let tmp = tempfile::tempdir().unwrap();
     let root = tmp.path().join("batch");
     fs::create_dir_all(&root).unwrap();
-    fs::write(root.join("ok.jpg"), tiny_jpeg()).unwrap();
+    fs::write(root.join("ok.jpg"), valid_jpeg()).unwrap();
 
     let sink = Arc::new(FailingFrameSink);
     let mut cfg = cfg_with_staging(tmp.path());
     cfg.fail_on_empty_batch = false;
+    cfg.fail_batch_on_sink_errors = false;
     let res = import_folder(&root, &cfg, sink, None).await.unwrap();
     assert_eq!(res.manifest.counts.failed_sink, 1);
     assert_eq!(res.manifest.counts.accepted, 0);
     assert!(res.manifest.reconcile_ok());
+    assert_eq!(res.outcome, BatchOutcome::PartialFailure);
     assert_eq!(
         res.manifest.frames[0].intake_status,
         IntakeStatus::FailedSink
@@ -340,11 +440,26 @@ async fn sink_failure_propagates_as_failed_sink() {
 }
 
 #[tokio::test]
+async fn sink_failure_fails_batch_when_configured() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path().join("batch");
+    fs::create_dir_all(&root).unwrap();
+    fs::write(root.join("ok.jpg"), valid_jpeg()).unwrap();
+
+    let sink = Arc::new(FailingFrameSink);
+    let mut cfg = cfg_with_staging(tmp.path());
+    cfg.fail_on_empty_batch = false;
+    cfg.fail_batch_on_sink_errors = true;
+    let err = import_folder(&root, &cfg, sink, None).await.unwrap_err();
+    assert!(err.to_string().contains("sink"));
+}
+
+#[tokio::test]
 async fn envelope_schema_roundtrip() {
     let tmp = tempfile::tempdir().unwrap();
     let root = tmp.path().join("batch");
     fs::create_dir_all(&root).unwrap();
-    fs::write(root.join("ok.jpg"), tiny_jpeg()).unwrap();
+    fs::write(root.join("ok.jpg"), valid_jpeg()).unwrap();
     let sink = Arc::new(InMemoryFrameSink::new());
     let cfg = cfg_with_staging(tmp.path());
     let _ = import_folder(&root, &cfg, sink.clone(), None)
@@ -359,7 +474,28 @@ async fn envelope_schema_roundtrip() {
 
 #[test]
 fn loads_repo_intake_toml() {
+    // CARGO_MANIFEST_DIR = Prime/Module 2/crates/talos-intake → ../../configs
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../configs");
     let cfg = load_intake_config(Some(&path)).unwrap();
     assert_eq!(cfg.max_images_per_batch, 10_000);
+    assert_eq!(cfg.max_width, 8192);
+    assert_eq!(cfg.max_height, 8192);
+    assert_eq!(cfg.max_pixel_count, 25_000_000);
+    assert!(!cfg.fail_batch_on_sink_errors);
+}
+
+#[test]
+fn batch_counts_deserializes_discovered_alias() {
+    let json = r#"{
+        "filesystem_entries_seen": 2,
+        "discovered": 1,
+        "accepted": 1,
+        "rejected": 0,
+        "skipped_duplicate": 0,
+        "failed_sink": 0,
+        "metadata_warnings": 0,
+        "ignored_unsupported": 1
+    }"#;
+    let counts: talos_intake::BatchCounts = serde_json::from_str(json).unwrap();
+    assert_eq!(counts.image_candidates_discovered, 1);
 }

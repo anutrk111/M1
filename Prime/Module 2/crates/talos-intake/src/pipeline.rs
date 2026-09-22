@@ -1,10 +1,11 @@
 use crate::config::IntakeConfig;
 use crate::discover::{basename_of, discover_images, DiscoveredFile};
-use crate::image::sniff_image;
+use crate::image::validate_image;
 use crate::metadata::MetadataIndex;
 use crate::sink::FrameSink;
 use crate::types::{
-    BatchCounts, BatchManifest, DuplicateReference, FrameRecord, ImportRequest, IntakeStatus,
+    BatchCounts, BatchManifest, BatchOutcome, DuplicateReference, FrameRecord, ImportRequest,
+    IntakeStatus,
 };
 use crate::zip_safe::{extract_zip_safe, read_file_capped};
 use std::collections::HashMap;
@@ -18,6 +19,7 @@ use tracing::{info, warn};
 #[derive(Clone, Debug)]
 pub struct ImportResult {
     pub manifest: BatchManifest,
+    pub outcome: BatchOutcome,
 }
 
 /// Import a folder of images (no continuous watching).
@@ -37,7 +39,8 @@ pub async fn import_folder(
     std::fs::create_dir_all(&staging).map_err(|e| TalosError::Transient(e.to_string()))?;
 
     // Stage by copying originals (bytes unchanged)
-    let (candidates, ignored) = discover_images(root, config).map_err(TalosError::Validation)?;
+    let (candidates, ignored, filesystem_entries_seen) =
+        discover_images(root, config).map_err(TalosError::Validation)?;
     let staged = stage_copies(&candidates, root, &staging)?;
 
     run_batch(
@@ -46,6 +49,7 @@ pub async fn import_folder(
         &staging,
         staged,
         ignored,
+        filesystem_entries_seen,
         config,
         sink,
         metadata_path,
@@ -70,7 +74,7 @@ pub async fn import_zip(
     let staging = config.staging_root.join(batch_id.as_str());
     extract_zip_safe(zip_path, &staging, config)?;
 
-    let (candidates, ignored) =
+    let (candidates, ignored, filesystem_entries_seen) =
         discover_images(&staging, config).map_err(TalosError::Validation)?;
     // Already in staging; use as-is
     let staged: Vec<DiscoveredFile> = candidates;
@@ -81,6 +85,7 @@ pub async fn import_zip(
         &staging,
         staged,
         ignored,
+        filesystem_entries_seen,
         config,
         sink,
         metadata_path,
@@ -126,6 +131,14 @@ fn stage_copies(
     Ok(out)
 }
 
+fn batch_outcome(counts: &BatchCounts) -> BatchOutcome {
+    if counts.failed_sink > 0 || counts.rejected > 0 {
+        BatchOutcome::PartialFailure
+    } else {
+        BatchOutcome::Complete
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 async fn run_batch(
     batch_id: talos_types::BatchId,
@@ -133,6 +146,7 @@ async fn run_batch(
     staging: &Path,
     staged: Vec<DiscoveredFile>,
     ignored_unsupported: u32,
+    filesystem_entries_seen: u32,
     config: &IntakeConfig,
     sink: Arc<dyn FrameSink>,
     metadata_path: Option<&Path>,
@@ -161,9 +175,12 @@ async fn run_batch(
         }
     }
 
+    let image_candidates_discovered = staged.len() as u32;
     let mut frames = Vec::new();
     let mut seen_sha: HashMap<String, talos_types::FrameId> = HashMap::new();
     let mut counts = BatchCounts {
+        filesystem_entries_seen,
+        image_candidates_discovered,
         ignored_unsupported,
         ..BatchCounts::default()
     };
@@ -178,7 +195,6 @@ async fn run_batch(
     let mut accepted_unique = 0u32;
 
     for file in &staged {
-        counts.discovered = counts.discovered.saturating_add(1);
         info!(relative_path = %file.relative, "file_discovered");
 
         if accepted_unique >= config.max_images_per_batch {
@@ -219,24 +235,31 @@ async fn run_batch(
             }
         };
 
-        let Some((_kind, content_type)) = sniff_image(&bytes) else {
-            let msg = "corrupt or unrecognized image magic".to_string();
-            warn!(relative_path = %file.relative, "file_rejected");
-            frames.push(FrameRecord {
-                frame_id: None,
-                relative_path: file.relative.clone(),
-                sha256: None,
-                intake_status: IntakeStatus::RejectedPermanent,
-                duplicate_of: None,
-                envelope: None,
-                error: Some(msg.clone()),
-            });
-            counts.rejected = counts.rejected.saturating_add(1);
-            errors.push(format!("{}: {msg}", file.relative));
-            continue;
+        let content_type = match validate_image(&bytes, config) {
+            Ok(ct) => ct,
+            Err(e) => {
+                let status = match &e {
+                    TalosError::Permanent(_) => IntakeStatus::RejectedPermanent,
+                    _ => IntakeStatus::RejectedValidation,
+                };
+                let msg = e.to_string();
+                warn!(error = %msg, relative_path = %file.relative, "file_rejected");
+                frames.push(FrameRecord {
+                    frame_id: None,
+                    relative_path: file.relative.clone(),
+                    sha256: None,
+                    intake_status: status,
+                    duplicate_of: None,
+                    envelope: None,
+                    error: Some(msg.clone()),
+                });
+                counts.rejected = counts.rejected.saturating_add(1);
+                errors.push(format!("{}: {msg}", file.relative));
+                continue;
+            }
         };
 
-        // SHA-256 over ORIGINAL accepted bytes (no mutation)
+        // SHA-256 over ORIGINAL accepted bytes (no mutation / re-encode)
         let sha = sha256_hex(&bytes);
         // Prove immutability: re-read file and compare
         let again =
@@ -335,10 +358,18 @@ async fn run_batch(
 
     counts.metadata_warnings = metadata_warnings;
 
+    // Prefer Err for empty batches when fail_on_empty_batch (Rejected at API level).
     if counts.accepted == 0 && config.fail_on_empty_batch {
         return Err(TalosError::Validation(
             "empty batch: no accepted images".into(),
         ));
+    }
+
+    if counts.failed_sink > 0 && config.fail_batch_on_sink_errors {
+        return Err(TalosError::Transient(format!(
+            "batch rejected: {} sink failures and fail_batch_on_sink_errors=true",
+            counts.failed_sink
+        )));
     }
 
     let manifest = BatchManifest {
@@ -348,7 +379,7 @@ async fn run_batch(
             kind: source_kind,
             path_or_key: request.path_or_key,
         },
-        counts,
+        counts: counts.clone(),
         frames,
         errors,
         warnings,
@@ -356,16 +387,21 @@ async fn run_batch(
 
     if !manifest.reconcile_ok() {
         return Err(TalosError::Internal(format!(
-            "manifest reconciliation failed: discovered={} accepted={} rejected={} dup={} sink={}",
-            manifest.counts.discovered,
+            "manifest reconciliation failed: filesystem_entries_seen={} image_candidates_discovered={} accepted={} rejected={} dup={} sink={} ignored={}",
+            manifest.counts.filesystem_entries_seen,
+            manifest.counts.image_candidates_discovered,
             manifest.counts.accepted,
             manifest.counts.rejected,
             manifest.counts.skipped_duplicate,
-            manifest.counts.failed_sink
+            manifest.counts.failed_sink,
+            manifest.counts.ignored_unsupported
         )));
     }
 
-    info!(%batch_id, "batch_completed");
+    let outcome = batch_outcome(&counts);
+    info!(%batch_id, ?outcome, "batch_completed");
     let _ = staging;
-    Ok(ImportResult { manifest })
+    // Staging under staging_root/batch_id is owned by M02 for intake; cleanup is
+    // deferred to the orchestrator / M10 (not deleted here).
+    Ok(ImportResult { manifest, outcome })
 }

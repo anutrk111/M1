@@ -12,6 +12,26 @@ pub enum IntakeStatus {
     FailedSink,
 }
 
+/// Batch-level outcome after intake finishes (or rejects the batch).
+///
+/// Semantics:
+/// - [`Complete`](BatchOutcome::Complete): `failed_sink == 0`, no rejected frames,
+///   `reconcile_ok`, and either `accepted >= 1` or an empty batch is allowed
+///   (`fail_on_empty_batch = false` with no frame failures).
+/// - [`PartialFailure`](BatchOutcome::PartialFailure): batch finished processing and
+///   returned `Ok`, but `failed_sink > 0` and/or frame-level rejections occurred
+///   (default continue policy when `fail_batch_on_sink_errors = false`).
+/// - [`Rejected`](BatchOutcome::Rejected): reserved for an `Ok` with zero accepted
+///   when callers choose that shape. Prefer returning `Err(TalosError)` for empty
+///   batches when `fail_on_empty_batch = true` (current default).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "PascalCase")]
+pub enum BatchOutcome {
+    Complete,
+    PartialFailure,
+    Rejected,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DuplicateReference {
     pub original_frame_id: FrameId,
@@ -36,13 +56,21 @@ pub struct FrameRecord {
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub struct BatchCounts {
-    pub discovered: u32,
+    /// Files seen under the batch root (not directories).
+    pub filesystem_entries_seen: u32,
+    /// Image-extension candidates discovered (was `discovered`).
+    #[serde(alias = "discovered")]
+    pub image_candidates_discovered: u32,
     pub accepted: u32,
     pub rejected: u32,
     pub skipped_duplicate: u32,
     pub failed_sink: u32,
     pub metadata_warnings: u32,
     /// Unsupported / ignored non-image files counted during discovery (explicit, not silent).
+    ///
+    /// If a metadata sidecar (CSV/XLSX) lives **inside** the batch root and its extension
+    /// is not in `allowed_extensions`, it is counted here. Sidecars **outside** the root
+    /// are not walked and therefore not counted.
     pub ignored_unsupported: u32,
 }
 
@@ -63,8 +91,12 @@ impl BatchManifest {
             + self.counts.rejected
             + self.counts.skipped_duplicate
             + self.counts.failed_sink;
-        // discovered = image candidates processed (not ignored_unsupported)
-        self.counts.discovered == accounted
+        self.counts.image_candidates_discovered == accounted
+            && self.counts.filesystem_entries_seen
+                == self
+                    .counts
+                    .image_candidates_discovered
+                    .saturating_add(self.counts.ignored_unsupported)
     }
 }
 

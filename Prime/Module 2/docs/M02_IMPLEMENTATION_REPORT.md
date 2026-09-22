@@ -60,15 +60,26 @@ In-batch SHA-256: first `Accepted`, later `SkippedDuplicate` with `DuplicateRefe
 
 ## Manifest reconciliation
 
-`discovered == accepted + rejected + skipped_duplicate + failed_sink` enforced (`reconcile_ok`).
+`image_candidates_discovered == accepted + rejected + skipped_duplicate + failed_sink`
+and `filesystem_entries_seen == image_candidates_discovered + ignored_unsupported` (`reconcile_ok`).
+
+## Hardening (post-MVP)
+
+See [M02_HARDENING_REPORT.md](M02_HARDENING_REPORT.md) for:
+
+- Prime workspace migration (Module 1 nested workspace removed; lockfile at `Prime/Cargo.lock`)
+- `BatchOutcome` + `fail_batch_on_sink_errors`
+- Clarified `BatchCounts` accounting fields
+- `image` crate decode validation (magic → decode, no re-encode; pixel limits)
+- Staging lifecycle: M02 owns staging for intake; cleanup deferred to orchestrator/M10
 
 ## Security controls
 
-Zip-slip / absolute ZIP paths / symlink reject; size/count caps; no network; no secrets in config.
+Zip-slip / absolute ZIP paths / symlink reject; size/count caps; magic + decode validation; no network; no secrets in config.
 
 ## Tests added
 
-Integration coverage: JPG/JPEG/PNG accept, unsupported, corrupt, order, SHA/immutability, duplicates, CSV join, basename/ambiguous, malformed metadata, missing metadata, ZIP import, zip-slip, absolute ZIP, sink failure, envelope serde, config load.
+Integration coverage: JPG/JPEG/PNG accept, unsupported, corrupt/fake-magic/truncated, order, SHA/immutability, duplicates, CSV join, basename/ambiguous, malformed metadata, missing metadata, ZIP import, zip-slip, absolute ZIP, sink failure / `BatchOutcome`, accounting invariants, envelope serde, config load.
 
 ## Verification (executed)
 
@@ -76,8 +87,10 @@ Integration coverage: JPG/JPEG/PNG accept, unsupported, corrupt, order, SHA/immu
 |---------|------|
 | `cargo fmt --all -- --check` | 0 |
 | `cargo clippy --workspace --all-targets --all-features -- -D warnings` | 0 |
-| `cargo test --workspace --all-features` | 0 (36 passed) |
+| `cargo test --workspace --all-features` | 0 (44 passed; see hardening report for post-MVP) |
 | `cargo check --workspace --all-targets --all-features` | 0 |
+
+*(Hardening re-verification: see M02_HARDENING_REPORT.md.)*
 
 ## Known limitations / deferred
 

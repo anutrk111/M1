@@ -19,6 +19,16 @@ Prime houses the foundational Talos modules.
 | M11 | Export & Reporting | [Module 11](Module%2011/) | PDR complete |
 | M12 | Auth, Admin & Config | [Module 12](Module%2012/) | PDR complete |
 
+## Develop
+
+Canonical Cargo workspace root is this directory (`Prime/Cargo.toml`):
+
+```bash
+cd Prime
+cargo test --workspace --all-features
+cargo clippy --workspace --all-targets --all-features -- -D warnings
+```
+
 ## Cross-cutting docs
 
 - [Global ADR registry](ADRs.md)

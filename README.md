@@ -37,10 +37,10 @@ See the authoritative table in **[Prime/README.md](Prime/README.md)**.
 | [Repository contract audit](docs/REPOSITORY_CONTRACT_AUDIT.md) | Audit findings |
 | [Baseline readiness report](docs/BASELINE_READINESS_REPORT.md) | CI/verification evidence |
 
-## Develop (M01 workspace)
+## Develop (Prime workspace)
 
 ```bash
-cd "Prime/Module 1"
+cd Prime
 cargo test --workspace --all-features
 cargo clippy --workspace --all-targets --all-features -- -D warnings
 ```

@@ -23,10 +23,15 @@ Apps (`talos-api`, `talos-worker`, `review-api`, `admin-gateway`) depend on M01 
 
 ## Quick start
 
+Canonical workspace root is **`Prime/`** (not this module):
+
 ```bash
-cargo test
-cargo run -p talos-worker -- run-fixture --config configs --out decision.json
+cd Prime
+cargo test --workspace --all-features
+cargo run -p talos-worker -- run-fixture --config "Module 1/configs" --out decision.json
 ```
+
+See [`CARGO_WORKSPACE.md`](CARGO_WORKSPACE.md).
 
 ## Config
 

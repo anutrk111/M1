@@ -10,23 +10,32 @@ pub struct DiscoveredFile {
 }
 
 /// Deterministic recursive discovery of allowed image extensions.
-/// Returns (image_candidates, ignored_unsupported_count).
+///
+/// Returns `(image_candidates, ignored_unsupported, filesystem_entries_seen)`.
+///
+/// - `filesystem_entries_seen`: every file under `root` (directories excluded).
+/// - `ignored_unsupported`: files whose extension is not allowed (e.g. `.txt`,
+///   or a CSV/XLSX sidecar that happens to live inside the batch root).
+/// - Metadata sidecars **outside** `root` are never walked and are not counted.
 pub fn discover_images(
     root: &Path,
     config: &IntakeConfig,
-) -> Result<(Vec<DiscoveredFile>, u32), String> {
+) -> Result<(Vec<DiscoveredFile>, u32, u32), String> {
     if !root.is_dir() {
         return Err(format!("not a directory: {}", root.display()));
     }
 
     let mut images = Vec::new();
     let mut ignored = 0u32;
+    let mut filesystem_entries_seen = 0u32;
 
     for entry in WalkDir::new(root).follow_links(false).into_iter() {
         let entry = entry.map_err(|e| e.to_string())?;
         if !entry.file_type().is_file() {
             continue;
         }
+        filesystem_entries_seen = filesystem_entries_seen.saturating_add(1);
+
         let path = entry.path();
         let rel = path
             .strip_prefix(root)
@@ -55,7 +64,7 @@ pub fn discover_images(
     }
 
     images.sort_by(|a, b| a.relative.cmp(&b.relative));
-    Ok((images, ignored))
+    Ok((images, ignored, filesystem_entries_seen))
 }
 
 pub fn normalize_rel_path(path: &str) -> String {
