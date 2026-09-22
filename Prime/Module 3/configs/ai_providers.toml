@@ -1,0 +1,47 @@
+# Defaults for M03 AI Provider Gateway (no secrets)
+
+[ai]
+# Use fixture provider in CI until real keys exist
+default_mode = "fixture"
+
+[ai.timeouts_ms]
+detect = 10000
+ocr = 15000
+hsrp = 15000
+vlm = 30000
+
+[ai.retry]
+max_retries = 2
+base_delay_ms = 200
+max_delay_ms = 5000
+
+[ai.vlm]
+enabled = true
+# Optional soft cap (operational); null = no gateway-enforced fraction
+max_fraction = 0.05
+
+[ai.operations.detect]
+primary = "fixture"
+fallbacks = []
+
+[ai.operations.ocr]
+primary = "fixture"
+fallbacks = []
+
+[ai.operations.hsrp]
+primary = "fixture"
+fallbacks = []
+
+[ai.operations.vlm]
+primary = "fixture"
+fallbacks = []
+
+# Example real-provider blocks (disabled until keys exist)
+# [ai.providers.openai]
+# enabled = false
+# base_url = "https://api.openai.com/v1"
+# detect_model = ""
+# ocr_model = ""
+# hsrp_model = ""
+# vlm_model = ""
+# API key: TALOS__AI__OPENAI__API_KEY

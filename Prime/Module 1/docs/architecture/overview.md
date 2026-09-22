@@ -42,8 +42,8 @@ M01 is the **central dependency hub**: shared types, config, errors, Stage 0–7
 | ID | Module | Role | PDR |
 |----|--------|------|-----|
 | **M01** | Foundation & Core | Types, config, errors, pipeline Stages 0–7, tracing, health, lifecycle | [M01-foundation-and-core.md](../pdr/M01-foundation-and-core.md) |
-| M02 | Batch & File Intake | Folder / ZIP / upload intake, metadata extraction | TBD |
-| M03 | AI Provider Gateway | Vision / VLM API integration, fallbacks, cost tracking | TBD |
+| M02 | Batch & File Intake | Folder / ZIP / upload intake, metadata extraction | [M02-batch-and-file-intake.md](../../Module%202/docs/pdr/M02-batch-and-file-intake.md) |
+| M03 | AI Provider Gateway | Vision / VLM API integration, fallbacks, cost tracking | [M03-ai-provider-gateway.md](../../Module%203/docs/pdr/M03-ai-provider-gateway.md) |
 | M04 | Image Pre-Processing | Quality checks, enhancement, cropping for AI APIs | TBD |
 | M05 | Vision Processing | Vehicle and plate detection (via M03) | TBD |
 | M06 | OCR & Plate Intelligence | OCR hypotheses, Indian registration grammar, evidence-based correction | TBD |
