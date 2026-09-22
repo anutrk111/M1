@@ -1,48 +1,47 @@
 # Module 2 — Batch & File Intake (M02)
 
-Turns folders, ZIP archives, and HTTP uploads into M01 `IntakeEnvelope` records (JSON schema v2.0), with optional CSV/XLSX metadata join and a batch manifest.
+Turns folders / ZIP archives (+ optional CSV/XLSX sidecars) into M01 `IntakeEnvelope` v2.0 records and a reconciliable `BatchManifest`.
 
 ## Status
 
-**Docs complete** (PDR, ADRs, wiki, config defaults). Rust crates are **not** implemented yet.
+| Layer | Status |
+|-------|--------|
+| PDR / ADRs / configs / wiki | Complete |
+| Rust crate `talos-intake` | **Implemented** (workspace member via Module 1) |
+| HTTP upload API | Deferred (same rules apply when wired) |
+| Durable queue sink | `NotImplemented` until queue module |
 
-## Folder layout
+## Crate
 
 ```text
-Prime/Module 2/
-  README.md
-  docs/
-    pdr/M02-batch-and-file-intake.md   # Normative PDR
-    adr/0004-intake-metadata-join.md    # Relative-path join + basename fallback
-    adr/0005-intake-no-silent-drop.md  # Accepted ⇒ sink or FailedSink
-    architecture/overview.md           # M02-focused overview
-  wiki/
-    Home.md
-    _Sidebar.md
-    Getting-Started.md                 # Docs-only; no cargo yet
-    M02-Batch-and-File-Intake.md       # Wiki mirror of the PDR
-  configs/
-    intake.toml                        # Defaults from PDR §11
-  tests/
-    fixtures/.gitkeep                  # Future intake fixtures
+Prime/Module 2/crates/talos-intake
 ```
 
-## Docs
+Integrated into the **Module 1 Cargo workspace** (path member / symlink). Depends on `talos-types`, `talos-core` only for shared contracts.
 
-| Document | Path |
-|----------|------|
-| **PDR (normative)** | [docs/pdr/M02-batch-and-file-intake.md](docs/pdr/M02-batch-and-file-intake.md) |
-| Architecture overview | [docs/architecture/overview.md](docs/architecture/overview.md) |
-| ADR 0004 — metadata join | [docs/adr/0004-intake-metadata-join.md](docs/adr/0004-intake-metadata-join.md) |
-| ADR 0005 — no silent drop | [docs/adr/0005-intake-no-silent-drop.md](docs/adr/0005-intake-no-silent-drop.md) |
-| Wiki (in-repo) | [wiki/](wiki/) |
+```bash
+cd "Prime/Module 1"
+cargo test -p talos-intake
+```
+
+## Public API (summary)
+
+- `import_folder` / `import_zip`
+- `FrameSink` + `InMemoryFrameSink`
+- `BatchManifest` with `IntakeStatus` accounting
+- `load_intake_config` ← `configs/intake.toml`
+
+## Contents
+
+| Path | Purpose |
+|------|---------|
+| [docs/pdr/M02-batch-and-file-intake.md](docs/pdr/M02-batch-and-file-intake.md) | Normative PDR |
+| [docs/adr/0004-intake-metadata-join.md](docs/adr/0004-intake-metadata-join.md) | Metadata join |
+| [docs/adr/0005-intake-no-silent-drop.md](docs/adr/0005-intake-no-silent-drop.md) | No silent drop |
+| [docs/M02_IMPLEMENTATION_REPORT.md](docs/M02_IMPLEMENTATION_REPORT.md) | Implementation evidence |
+| [configs/intake.toml](configs/intake.toml) | Defaults |
+| [crates/talos-intake](crates/talos-intake/) | Rust implementation |
 
 ## Depends on
 
-[Module 1 — Foundation & Core](../Module%201/) (`talos-types`, `talos-core` utilities / errors, pipeline handoff).
-
-## Later (not in this folder yet)
-
-- `crates/talos-intake`
-- HTTP / CLI intake wired to `FrameSink`
-- Durable queue adapters (NATS / RabbitMQ)
+[Module 1](../Module%201/)

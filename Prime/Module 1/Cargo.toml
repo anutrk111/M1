@@ -9,6 +9,7 @@ members = [
     "apps/talos-worker",
     "apps/review-api",
     "apps/admin-gateway",
+    "crates/talos-intake",
 ]
 default-members = [
     "crates/talos-types",
@@ -16,6 +17,7 @@ default-members = [
     "crates/talos-core",
     "crates/observability",
     "apps/talos-worker",
+    "crates/talos-intake",
 ]
 
 [workspace.package]
@@ -30,13 +32,14 @@ talos-types = { path = "crates/talos-types" }
 talos-config = { path = "crates/talos-config" }
 talos-core = { path = "crates/talos-core" }
 observability = { path = "crates/observability" }
+talos-intake = { path = "crates/talos-intake" }
 
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "2"
 anyhow = "1"
 async-trait = "0.1"
-tokio = { version = "1", features = ["rt-multi-thread", "macros", "signal", "sync", "time"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "signal", "sync", "time", "fs", "io-util"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 figment = { version = "0.10", features = ["toml", "env"] }
