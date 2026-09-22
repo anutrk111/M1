@@ -1,0 +1,14 @@
+# M05 detection defaults (starting points — not accuracy claims)
+
+[detection]
+backend = "fixture"
+min_plate_score = 0.35
+min_vehicle_score = 0.35
+max_plates = 20
+max_vehicles = 20
+prefer_plates_inside_vehicles = true
+
+# In-frame overlapping box suppression (NOT Stage 6 pipeline dedup)
+[dedup]
+enabled = true
+iou_threshold = 0.70
