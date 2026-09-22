@@ -6,7 +6,7 @@
 
 ## Final local SHA
 
-Recorded at commit time (see git log / push status in engineering report).
+`394b4f11f8728300fba9fa36ef8f12222ae1690b` (feat commit; report SHA update follows in a docs commit)
 
 ## Files created
 
