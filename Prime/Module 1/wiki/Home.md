@@ -26,6 +26,4 @@ This wiki covers Module **M01 Foundation & Core** and the hexagonal architecture
 
 Source: [anutrk111/M1](https://github.com/anutrk111/M1)
 
----
-
-> **Note on GitHub Wiki tab:** Native GitHub Wikis require a **public** repo or **GitHub Pro** for private repos. This `wiki/` folder is the canonical wiki content in-repo; it can be mirrored to `M1.wiki.git` once the Wiki feature is enabled.
+In-repo mirror of these pages: [`wiki/`](https://github.com/anutrk111/M1/tree/main/wiki)
