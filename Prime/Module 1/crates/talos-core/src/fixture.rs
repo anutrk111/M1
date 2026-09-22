@@ -50,6 +50,7 @@ impl Stage for FixtureImageQuality {
             blur_score: 0.15,
             exposure_ok: true,
             notes: vec!["fixture".into()],
+            gate: Some(ImageQualityGate::Accept),
         });
         ctx.push_visual_evidence(Evidence::visual(
             "fixture.s0",
@@ -78,6 +79,11 @@ impl Stage for FixtureDetection {
                 w: 240.0,
                 h: 60.0,
             },
+            detection_id: Some(DetectionId::new("fixture-plate-1")),
+            provider: Some(ProviderRef {
+                name: "fixture".into(),
+                model: None,
+            }),
         };
         ctx.detections = Some(Detections {
             vehicles: vec![Detection {
@@ -89,8 +95,22 @@ impl Stage for FixtureDetection {
                     w: 500.0,
                     h: 360.0,
                 },
+                detection_id: Some(DetectionId::new("fixture-vehicle-1")),
+                provider: Some(ProviderRef {
+                    name: "fixture".into(),
+                    model: None,
+                }),
             }],
             plates: vec![plate],
+            summary: Some(DetectionSummary {
+                raw_plate_count: 1,
+                accepted_plate_count: 1,
+                filtered_low_score: 0,
+                suppressed_overlap: 0,
+                truncated: 0,
+                raw_vehicle_count: 1,
+                accepted_vehicle_count: 1,
+            }),
         });
         ctx.push_visual_evidence(Evidence::visual(
             "fixture.s1",
@@ -126,6 +146,11 @@ impl Stage for FixtureRectification {
             crop_ref: format!("fixture://crop/{}", ctx.intake.frame_id),
             width: 240,
             height: 60,
+            detection_id: ctx
+                .detections
+                .as_ref()
+                .and_then(|d| d.plates.first())
+                .and_then(|p| p.detection_id.clone()),
         });
         Ok(StageStatus::Continue)
     }
@@ -147,6 +172,7 @@ impl Stage for FixtureOcr {
             text: text.clone(),
             confidence: 0.96,
             char_confidences: confidences,
+            detection_id: ctx.rectified.as_ref().and_then(|r| r.detection_id.clone()),
         }];
         ctx.push_visual_evidence(Evidence::visual(
             "fixture.s3",
@@ -170,18 +196,14 @@ pub fn validate_indian_plate(raw: &str) -> GrammarResult {
         // Pattern: 2 letters + 2 digits + 1–3 letters + 4 digits (common private format).
         let re_ok = normalized.len() >= 8
             && normalized.len() <= 11
-            && bytes.get(0).is_some_and(|b| b.is_ascii_alphabetic())
+            && bytes.first().is_some_and(|b| b.is_ascii_alphabetic())
             && bytes.get(1).is_some_and(|b| b.is_ascii_alphabetic())
             && bytes.get(2).is_some_and(|b| b.is_ascii_digit())
             && bytes.get(3).is_some_and(|b| b.is_ascii_digit())
             && normalized[4..normalized.len().saturating_sub(4)]
                 .chars()
                 .all(|c| c.is_ascii_alphabetic())
-            && normalized
-                .chars()
-                .rev()
-                .take(4)
-                .all(|c| c.is_ascii_digit());
+            && normalized.chars().rev().take(4).all(|c| c.is_ascii_digit());
         re_ok
             && !normalized[4..normalized.len().saturating_sub(4)].is_empty()
             && normalized[4..normalized.len().saturating_sub(4)].len() <= 3
@@ -195,6 +217,7 @@ pub fn validate_indian_plate(raw: &str) -> GrammarResult {
         } else {
             vec!["does not match Indian private vehicle pattern".into()]
         },
+        detection_id: None,
     }
 }
 
@@ -207,11 +230,7 @@ impl Stage for FixtureGrammar {
         "fixture_grammar"
     }
     async fn process(&self, ctx: &mut FrameContext) -> Result<StageStatus, TalosError> {
-        let text = ctx
-            .ocr
-            .first()
-            .map(|h| h.text.as_str())
-            .unwrap_or("");
+        let text = ctx.ocr.first().map(|h| h.text.as_str()).unwrap_or("");
         let result = validate_indian_plate(text);
         ctx.grammar = Some(result);
         Ok(StageStatus::Continue)
@@ -233,6 +252,7 @@ impl Stage for FixtureHsrp {
             hologram_cues: true,
             geometry_ok: true,
             notes: vec!["fixture".into()],
+            detection_id: ctx.rectified.as_ref().and_then(|r| r.detection_id.clone()),
         });
         ctx.push_visual_evidence(Evidence::visual(
             "fixture.s5",
@@ -246,13 +266,13 @@ impl Stage for FixtureHsrp {
 #[async_trait]
 impl Stage for FixtureDedup {
     fn id(&self) -> StageId {
-        StageId::Dedup
+        StageId::ObservationDedup
     }
     fn name(&self) -> &'static str {
-        "fixture_dedup"
+        "fixture_observation_dedup"
     }
     async fn process(&self, ctx: &mut FrameContext) -> Result<StageStatus, TalosError> {
-        ctx.dedup = Some(DedupResult {
+        ctx.observation_dedup = Some(DedupResult {
             is_duplicate: false,
             matched_frame_id: None,
             method: Some("fixture_none".into()),
@@ -274,6 +294,7 @@ impl Stage for FixtureDecision {
             normalized_text: String::new(),
             ok: false,
             errors: vec!["missing grammar".into()],
+            detection_id: None,
         });
         let hsrp_score = ctx.hsrp.as_ref().map(|h| h.score).unwrap_or(0.0);
         let ocr_conf = ctx.ocr.first().map(|o| o.confidence).unwrap_or(0.0);
@@ -301,9 +322,11 @@ impl Stage for FixtureDecision {
         let hard_fail = !hard_fail_reasons.is_empty();
 
         // Simple evidence-driven fusion (not OCR alone).
-        let fused_confidence =
-            (0.25 * ocr_conf) + (0.25 * det_conf) + (0.20 * hsrp_score) + (0.15 * quality)
-                + (0.15 * if grammar.ok { 1.0 } else { 0.0 });
+        let fused_confidence = (0.25 * ocr_conf)
+            + (0.25 * det_conf)
+            + (0.20 * hsrp_score)
+            + (0.15 * quality)
+            + (0.15 * if grammar.ok { 1.0 } else { 0.0 });
 
         let outcome = self.decision.outcome_for(fused_confidence, hard_fail);
 
@@ -315,6 +338,7 @@ impl Stage for FixtureDecision {
             outcome,
             hard_fail,
             hard_fail_reasons,
+            config_revision_id: None,
         });
         Ok(StageStatus::Continue)
     }

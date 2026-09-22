@@ -19,11 +19,7 @@ pub struct Evidence {
 }
 
 impl Evidence {
-    pub fn visual(
-        source: impl Into<String>,
-        payload: serde_json::Value,
-        confidence: f32,
-    ) -> Self {
+    pub fn visual(source: impl Into<String>, payload: serde_json::Value, confidence: f32) -> Self {
         Self {
             kind: EvidenceKind::VisualObservation,
             source: source.into(),

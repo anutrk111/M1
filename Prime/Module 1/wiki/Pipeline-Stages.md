@@ -10,7 +10,7 @@ Orchestrated by **M01** (`talos-core::Pipeline`). Stage logic lives in M04–M08
 | 3 | OCR | [M06](../../Module%206/docs/pdr/M06-ocr-plate-intelligence.md) via M03 |
 | 4 | Indian Registration Grammar | [M06](../../Module%206/docs/pdr/M06-ocr-plate-intelligence.md) |
 | 5 | HSRP Evidence | [M07](../../Module%207/docs/pdr/M07-hsrp-analysis.md) via M03 |
-| 6 | Observation Dedup (clusters) | [M08](../../Module%208/docs/pdr/M08-confidence-decision.md) / M10 |
+| 6 | Observation Deduplication / Clustering | [M08](../../Module%208/docs/pdr/M08-confidence-decision.md) / M10 |
 | 7 | Confidence Fusion & Decision | [M08](../../Module%208/docs/pdr/M08-confidence-decision.md) |
 
 ## Stage contract

@@ -13,7 +13,7 @@ pub fn validate(config: &TalosConfig) -> Result<(), ConfigError> {
             )));
         }
     }
-    if !(d.secondary_min < d.auto_approve_min) {
+    if d.secondary_min.partial_cmp(&d.auto_approve_min) != Some(std::cmp::Ordering::Less) {
         return Err(ConfigError::Validation(format!(
             "secondary_min ({}) must be < auto_approve_min ({})",
             d.secondary_min, d.auto_approve_min

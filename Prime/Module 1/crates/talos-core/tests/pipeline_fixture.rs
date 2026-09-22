@@ -1,12 +1,12 @@
 //! Integration: fixture Stages 0–7 → schema-valid decision JSON (no GPU/network).
 
+use std::sync::Arc;
+use talos_config::DecisionConfig;
 use talos_core::fixture::{fixture_pipeline, validate_indian_plate, NotImplementedStage};
 use talos_core::pipeline::{FrameContext, Pipeline, Stage, StageId};
 use talos_core::util::{new_batch_id, new_frame_id, new_trace_id, sha256_hex};
 use talos_core::TalosError;
-use talos_config::DecisionConfig;
 use talos_types::*;
-use std::sync::Arc;
 
 fn sample_intake() -> IntakeEnvelope {
     IntakeEnvelope::new(
@@ -31,10 +31,7 @@ async fn fixture_pipeline_emits_decision_json() {
     let mut ctx = FrameContext::new(sample_intake(), new_trace_id());
     pipeline.run(&mut ctx).await.unwrap();
 
-    assert_eq!(
-        ctx.terminal_status,
-        Some(FrameTerminalStatus::Succeeded)
-    );
+    assert_eq!(ctx.terminal_status, Some(FrameTerminalStatus::Succeeded));
 
     let json = ctx.to_decision_json().unwrap();
     assert_eq!(json.schema_version, SCHEMA_VERSION);

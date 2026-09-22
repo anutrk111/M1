@@ -289,7 +289,7 @@ impl Pipeline {
 | 3 | OCR | M06 via M03 | Invoke; record latency |
 | 4 | Indian Registration Grammar | M06 | Prefer deterministic in-process |
 | 5 | HSRP Evidence Engine | M07 via M03 | Invoke; record latency |
-| 6 | Deduplication & Tracking | M08 / M10 helpers | Batch-scoped store injection |
+| 6 | Observation Deduplication / Clustering | M08 / M10 helpers | Batch-scoped store injection |
 | 7 | Confidence Fusion & Decision | M08 | Apply **config** thresholds |
 
 M01 orchestrates only. Algorithmic logic lives in M04–M08 (and M03 for remote vision).

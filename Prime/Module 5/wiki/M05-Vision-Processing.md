@@ -11,7 +11,7 @@ Stage 1 — vehicle + plate detection on **original frame**.
 - Talos-owned `DetectionId` (provider id optional)
 - Canonical pixel `BoundingBox`
 - Multi-plate 0..N; empty success ≠ error
-- In-frame IoU suppression ≠ Stage 6 dedup
+- In-frame IoU **detection suppression** ≠ Stage 6 observation dedup/clustering
 - Auditable `DetectionSummary`
 - No plate text / HSRP / decisions
 - Remote path only via M03

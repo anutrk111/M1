@@ -48,12 +48,7 @@ pub struct IntakeEnvelope {
 }
 
 impl IntakeEnvelope {
-    pub fn new(
-        batch_id: BatchId,
-        frame_id: FrameId,
-        source: SourceRef,
-        image: ImageRef,
-    ) -> Self {
+    pub fn new(batch_id: BatchId, frame_id: FrameId, source: SourceRef, image: ImageRef) -> Self {
         Self {
             schema_version: crate::SCHEMA_VERSION.to_owned(),
             batch_id,

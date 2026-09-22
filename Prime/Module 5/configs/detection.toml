@@ -8,7 +8,7 @@ max_plates = 20
 max_vehicles = 20
 prefer_plates_inside_vehicles = true
 
-# In-frame overlapping box suppression (NOT Stage 6 pipeline dedup)
-[dedup]
+# In-frame overlapping box DETECTION SUPPRESSION (NOT M08 Stage 6 observation dedup)
+[suppression]
 enabled = true
 iou_threshold = 0.70

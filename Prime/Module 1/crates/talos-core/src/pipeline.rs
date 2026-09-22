@@ -15,7 +15,7 @@ pub enum StageId {
     Ocr = 3,
     Grammar = 4,
     Hsrp = 5,
-    Dedup = 6,
+    ObservationDedup = 6,
     Decision = 7,
 }
 
@@ -27,7 +27,7 @@ impl StageId {
         Self::Ocr,
         Self::Grammar,
         Self::Hsrp,
-        Self::Dedup,
+        Self::ObservationDedup,
         Self::Decision,
     ];
 
@@ -43,7 +43,7 @@ impl StageId {
             Self::Ocr => "ocr",
             Self::Grammar => "grammar",
             Self::Hsrp => "hsrp",
-            Self::Dedup => "dedup",
+            Self::ObservationDedup => "observation_dedup",
             Self::Decision => "decision",
         }
     }
@@ -67,7 +67,8 @@ pub struct FrameContext {
     pub ocr: Vec<OcrHypothesis>,
     pub grammar: Option<GrammarResult>,
     pub hsrp: Option<HsrpEvidence>,
-    pub dedup: Option<DedupResult>,
+    /// Stage 6 observation cluster / dedup result (not vehicle tracking).
+    pub observation_dedup: Option<DedupResult>,
     pub fused: Option<FusedDecision>,
     pub evidence: Vec<Evidence>,
     pub timings_ms: [u64; 8],
@@ -85,7 +86,7 @@ impl FrameContext {
             ocr: Vec::new(),
             grammar: None,
             hsrp: None,
-            dedup: None,
+            observation_dedup: None,
             fused: None,
             evidence: Vec::new(),
             timings_ms: [0; 8],

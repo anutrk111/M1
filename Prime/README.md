@@ -18,3 +18,9 @@ Prime houses the foundational Talos modules.
 | M10 | Storage & Data | [Module 10](Module%2010/) | PDR complete |
 | M11 | Export & Reporting | [Module 11](Module%2011/) | PDR complete |
 | M12 | Auth, Admin & Config | [Module 12](Module%2012/) | PDR complete |
+
+## Cross-cutting docs
+
+- [Global ADR registry](ADRs.md)
+- [Repository contract audit](../docs/REPOSITORY_CONTRACT_AUDIT.md)
+- [M01 contract consolidation](Module%201/docs/architecture/contract-consolidation.md)

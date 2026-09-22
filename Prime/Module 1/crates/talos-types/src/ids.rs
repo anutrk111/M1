@@ -54,3 +54,11 @@ id_newtype!(
     "Optional metadata from CSV/XLSX — not a live feed handle."
 );
 id_newtype!(TraceId, "Correlation ID for logs and spans.");
+id_newtype!(
+    DetectionId,
+    "Talos-owned plate/vehicle detection lineage id (M05+)."
+);
+id_newtype!(
+    ConfigRevisionId,
+    "Immutable config revision fingerprint governing a decision (M12)."
+);

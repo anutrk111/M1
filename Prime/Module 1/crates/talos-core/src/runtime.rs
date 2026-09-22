@@ -49,9 +49,7 @@ pub fn init_tracing(obs: &ObservabilityConfig) -> Result<(), TalosError> {
         .or_else(|_| EnvFilter::try_new("info"))
         .map_err(|e| TalosError::Config(format!("invalid log filter: {e}")))?;
 
-    let subscriber = fmt()
-        .with_env_filter(filter)
-        .with_target(true);
+    let subscriber = fmt().with_env_filter(filter).with_target(true);
 
     if obs.json_logs {
         subscriber.json().try_init().ok();

@@ -14,7 +14,7 @@ Lineage from detection through rectification and OCR/HSRP must not break when pr
 2. Output geometry is **original-frame pixel** `BoundingBox` (`x,y,width,height` with in-bounds rules). Normalize at M03/M05 boundary so M04 never sees provider-normalized coords.
 3. Support **0..N** plates; architecture not locked to a single best plate.
 4. Optional `associated_vehicle_id` is spatial only; never drop a valid plate solely for missing association.
-5. In-frame **detection suppression** (`[dedup]` IoU) ≠ M01 Stage 6 pipeline deduplication.
+5. In-frame **detection suppression** (`[suppression]` IoU) ≠ M08 Stage 6 **observation deduplication / clustering**.
 6. Record `DetectionSummary` (raw/accepted/filtered/suppressed/truncated) — no silent truncation.
 7. Provider success with 0 plates → Continue with empty list; not Validation; not final rejection.
 8. M05 must not emit plate text, registration codes, HSRP flags, or decisions.

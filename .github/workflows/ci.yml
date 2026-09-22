@@ -1,0 +1,94 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  rust:
+    name: M01 Rust workspace
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: Prime/Module 1
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - name: cargo fmt
+        run: cargo fmt --all -- --check
+      - name: cargo clippy
+        run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+      - name: cargo test
+        run: cargo test --workspace --all-features
+      - name: cargo check
+        run: cargo check --workspace --all-targets --all-features
+
+  docs-contracts:
+    name: Docs / contract validation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Required modules and PDRs
+        run: |
+          set -euo pipefail
+          for n in 1 2 3 4 5 6 7 8 9 10 11 12; do
+            test -d "Prime/Module $n"
+          done
+          test -f "Prime/Module 1/docs/pdr/M01-foundation-and-core.md"
+          test -f "Prime/Module 2/docs/pdr/M02-batch-and-file-intake.md"
+          test -f "Prime/Module 3/docs/pdr/M03-ai-provider-gateway.md"
+          test -f "Prime/Module 4/docs/pdr/M04-image-pre-processing.md"
+          test -f "Prime/Module 5/docs/pdr/M05-vision-processing.md"
+          test -f "Prime/Module 6/docs/pdr/M06-ocr-plate-intelligence.md"
+          test -f "Prime/Module 7/docs/pdr/M07-hsrp-analysis.md"
+          test -f "Prime/Module 8/docs/pdr/M08-confidence-decision.md"
+          test -f "Prime/Module 9/docs/pdr/M09-review-management.md"
+          test -f "Prime/Module 10/docs/pdr/M10-storage-and-data.md"
+          test -f "Prime/Module 11/docs/pdr/M11-export-and-reporting.md"
+          test -f "Prime/Module 12/docs/pdr/M12-auth-admin-config.md"
+          test -f "Prime/ADRs.md"
+          test -f "docs/REPOSITORY_CONTRACT_AUDIT.md"
+      - name: Duplicate ADR numbers
+        run: |
+          set -euo pipefail
+          nums=$(find Prime -path '*/docs/adr/*.md' -printf '%f\n' | sed -E 's/^([0-9]+).*/\1/' | sort)
+          dups=$(echo "$nums" | uniq -d)
+          if [ -n "$dups" ]; then
+            echo "Duplicate ADR numbers: $dups"
+            exit 1
+          fi
+          echo "ADR numbers unique ($(echo "$nums" | wc -l) files)"
+      - name: Spot-check relative PDR links from Module 1 architecture
+        run: |
+          set -euo pipefail
+          # Links of the form ../../Module%20N/docs/pdr/... from overview.md
+          overview="Prime/Module 1/docs/architecture/overview.md"
+          python3 - <<'PY'
+          import re, pathlib, urllib.parse, sys
+          root = pathlib.Path(".")
+          text = pathlib.Path("Prime/Module 1/docs/architecture/overview.md").read_text()
+          base = pathlib.Path("Prime/Module 1/docs/architecture")
+          missing = []
+          for m in re.finditer(r"\]\(([^)]+)\)", text):
+              href = m.group(1)
+              if href.startswith("http") or href.startswith("#"):
+                  continue
+              path = urllib.parse.unquote(href.split("#")[0])
+              target = (base / path).resolve()
+              try:
+                  target.relative_to(root.resolve())
+              except ValueError:
+                  continue
+              if not target.exists():
+                  missing.append(str(target))
+          if missing:
+              print("Broken links:")
+              for x in missing:
+                  print(" ", x)
+              sys.exit(1)
+          print("overview.md relative links OK")
+          PY

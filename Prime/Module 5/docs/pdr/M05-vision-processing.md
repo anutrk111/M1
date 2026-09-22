@@ -57,7 +57,7 @@ Downstream evidence must remain joinable to its originating **Talos-owned** `Det
 | M06 | OCR + grammar |
 | M07 | HSRP analysis |
 | M08 | Final decision / NoPlateDetected implication |
-| Stage 6 | Cross-frame pipeline deduplication |
+| Stage 6 | Cross-frame observation deduplication / clustering (M08) |
 
 ### 3.3 Forbidden outputs
 
@@ -159,7 +159,7 @@ OriginalFrame
 4. Normalize provider geometry to pixel `BoundingBox` (+ optional quad in pixel space).
 5. Drop invalid geometry → count toward validation failures / exclude from accepted set.
 6. Filter by `min_plate_score` / `min_vehicle_score`.
-7. If `[dedup].enabled`, suppress overlapping same-class boxes by IoU ≥ `iou_threshold` (keep higher score).
+7. If `[suppression].enabled`, suppress overlapping same-class boxes by IoU ≥ `iou_threshold` (keep higher score).
 8. Truncate to `max_plates` / `max_vehicles` by score; increment `truncated`.
 9. Assign new Talos `DetectionId` per accepted detection; copy provider id if present.
 10. Optionally associate plates to vehicles (containment / IoU assist when `prefer_plates_inside_vehicles`); never drop unassociated valid plates.
@@ -180,12 +180,12 @@ OriginalFrame
 
 ---
 
-## 8. Overlap suppression vs Stage 6
+## 8. Detection suppression vs Stage 6 observation dedup
 
 | Name | Where | Meaning |
 |------|-------|---------|
-| Detection suppression | M05 `[dedup]` | Same frame overlapping boxes |
-| Pipeline deduplication | M01 Stage 6 | Across frames/files |
+| Detection suppression | M05 `[suppression]` | Same frame overlapping boxes |
+| Observation deduplication / clustering | M08 Stage 6 | Across imported frames/files (not vehicle tracking) |
 
 Metrics/docs must never mix these terms.
 
