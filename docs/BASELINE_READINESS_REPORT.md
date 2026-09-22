@@ -13,7 +13,7 @@
 
 ## 3. HEAD SHA after work
 
-Recorded at commit time in git log (this baseline commit on `main` after verification).
+`f88c18d7d821a820c40152a4522e147b48c29cba`
 
 ## 4. Files changed (summary)
 
