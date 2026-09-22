@@ -7,11 +7,11 @@ Orchestrated by **M01** (`talos-core::Pipeline`). Stage logic lives in M04–M08
 | 0 | Image Quality Assessment | M04 |
 | 1 | Vehicle + Plate Detection | M05 via M03 |
 | 2 | Plate Rectification & Enhancement | M04 |
-| 3 | OCR | M06 via M03 |
-| 4 | Indian Registration Grammar | M06 (deterministic preferred) |
-| 5 | HSRP Evidence | M07 via M03 |
-| 6 | Deduplication & Tracking | M08 / M10 |
-| 7 | Confidence Fusion & Decision | M08 |
+| 3 | OCR | [M06](../../Module%206/docs/pdr/M06-ocr-plate-intelligence.md) via M03 |
+| 4 | Indian Registration Grammar | [M06](../../Module%206/docs/pdr/M06-ocr-plate-intelligence.md) |
+| 5 | HSRP Evidence | [M07](../../Module%207/docs/pdr/M07-hsrp-analysis.md) via M03 |
+| 6 | Observation Dedup (clusters) | [M08](../../Module%208/docs/pdr/M08-confidence-decision.md) / M10 |
+| 7 | Confidence Fusion & Decision | [M08](../../Module%208/docs/pdr/M08-confidence-decision.md) |
 
 ## Stage contract
 
@@ -36,12 +36,12 @@ enum StageStatus { Continue, SkipRemaining, Halt }
 
 ## Decision thresholds (`configs/decision.toml`)
 
-| Outcome | Default |
-|---------|---------|
+| Outcome | Starting default band |
+|---------|------------------------|
 | AutoApproved | ≥ 0.90 |
 | SecondaryVerification | 0.80 – 0.90 |
 | ReviewRequired | < 0.80 |
 
-Thresholds are config-driven, not hardcoded.
+These are **starting configuration defaults only**, not validated production accuracy thresholds. Normative fusion: [M08 PDR](../../Module%208/docs/pdr/M08-confidence-decision.md).
 
 Full detail: [[M01-Foundation-and-Core]] · ADR: [[ADRs]]

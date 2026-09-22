@@ -1,0 +1,22 @@
+# M12 admin / config-reload policy (NO SECRETS)
+
+[config_reload]
+# Only explicitly marked operational knobs may hot-reload
+enabled = true
+# Secrets (signing keys, provider API keys, DB credentials) require restart
+secrets_require_restart = true
+
+[config_reload.reloadable]
+# Examples of operational knobs (owned modules still validate meaning)
+decision_thresholds = true
+review_queue_flags = true
+export_row_limits = true
+
+[config_reload.not_reloadable]
+auth_signing_keys = true
+provider_api_keys = true
+database_credentials = true
+
+[audit]
+# AuthN/Z and config events persist via M10 (or AuthAuditStore port)
+append_only = true

@@ -1,0 +1,22 @@
+# M08 decision defaults (STARTING CONFIGURATION ONLY — not validated production accuracy)
+
+[decision]
+auto_approve_min = 0.90
+secondary_min = 0.80
+hard_fail_on_grammar = true
+hard_fail_on_no_plate = true
+# Eligibility before rank: grammar-invalid cannot become primary solely via high score
+require_eligible_for_primary = true
+
+[decision.dedup]
+enabled = true
+# Observation clusters across imported frames/files — NOT M05 in-frame IoU
+# Early versions must NOT claim "same vehicle"
+claim_same_vehicle = false
+
+[decision.vlm]
+enabled = true
+trigger = "secondary_band"  # secondary_band | review_band | never
+# VLM is additive VisualObservation only; cannot bypass thresholds or erase hard evidence
+can_bypass_thresholds = false
+can_erase_hard_evidence = false

@@ -46,13 +46,13 @@ M01 is the **central dependency hub**: shared types, config, errors, Stage 0–7
 | M03 | AI Provider Gateway | Vision / VLM API integration, fallbacks, cost tracking | [M03-ai-provider-gateway.md](../../Module%203/docs/pdr/M03-ai-provider-gateway.md) |
 | M04 | Image Pre-Processing | Quality checks, enhancement, cropping for AI APIs | [M04-image-pre-processing.md](../../Module%204/docs/pdr/M04-image-pre-processing.md) |
 | M05 | Vision Processing | Vehicle and plate detection (via M03) | [M05-vision-processing.md](../../Module%205/docs/pdr/M05-vision-processing.md) |
-| M06 | OCR & Plate Intelligence | OCR hypotheses, Indian registration grammar, evidence-based correction | TBD |
-| M07 | HSRP Analysis | IND region, hologram, geometry, color/layout cues (via M03) | TBD |
-| M08 | Confidence & Decision | Multi-factor fusion; Auto vs Secondary vs Review thresholds | TBD |
-| M09 | Review Management | Human VERIFY / CORRECT / REJECT / UNREADABLE | TBD |
-| M10 | Storage & Data | PostgreSQL, TimescaleDB, MinIO/S3 | TBD |
-| M11 | Export & Reporting | CSV/XLSX exports, summary statistics | TBD |
-| M12 | Auth, Admin & Config | Users, RBAC, MFA, system settings | TBD |
+| M06 | OCR & Plate Intelligence | OCR hypotheses, Indian registration grammar, evidence-based correction | [M06-ocr-plate-intelligence.md](../../Module%206/docs/pdr/M06-ocr-plate-intelligence.md) |
+| M07 | HSRP Analysis | IND region, hologram, geometry, color/layout cues (via M03) | [M07-hsrp-analysis.md](../../Module%207/docs/pdr/M07-hsrp-analysis.md) |
+| M08 | Confidence & Decision | Multi-factor fusion; Auto vs Secondary vs Review thresholds | [M08-confidence-decision.md](../../Module%208/docs/pdr/M08-confidence-decision.md) |
+| M09 | Review Management | Human VERIFY / CORRECT / REJECT / UNREADABLE | [M09-review-management.md](../../Module%209/docs/pdr/M09-review-management.md) |
+| M10 | Storage & Data | PostgreSQL, TimescaleDB, MinIO/S3 | [M10-storage-and-data.md](../../Module%2010/docs/pdr/M10-storage-and-data.md) |
+| M11 | Export & Reporting | CSV/XLSX exports, summary statistics | [M11-export-and-reporting.md](../../Module%2011/docs/pdr/M11-export-and-reporting.md) |
+| M12 | Auth, Admin & Config | Users, RBAC, MFA, system settings | [M12-auth-admin-config.md](../../Module%2012/docs/pdr/M12-auth-admin-config.md) |
 
 ## Pipeline (Stages 0–7)
 
@@ -69,6 +69,8 @@ Orchestrated by **M01**; implemented by M04–M08 (remote vision via M03):
 | 6 | Deduplication & Tracking |
 | 7 | Confidence Fusion & Decision |
 
+Stage ownership PDRs: [M06](../../Module%206/docs/pdr/M06-ocr-plate-intelligence.md) (3–4), [M07](../../Module%207/docs/pdr/M07-hsrp-analysis.md) (5), [M08](../../Module%208/docs/pdr/M08-confidence-decision.md) (6–7).
+
 Normative contracts, decision thresholds, and evidence separation rules are defined in the [M01 PDR](../pdr/M01-foundation-and-core.md).
 
 ## Evidence model
@@ -80,10 +82,10 @@ VLM may add evidence for ambiguous cases; it must not silently override determin
 
 ## Decision thresholds (config-driven)
 
-Defaults (override in `configs/decision.toml`):
+Starting defaults (override in `configs/decision.toml`) — **not** validated production accuracy claims. See [M08 PDR](../../Module%208/docs/pdr/M08-confidence-decision.md):
 
-| Outcome | Default band |
-|---------|----------------|
+| Outcome | Starting default band |
+|---------|------------------------|
 | Auto-approved | ≥ 0.90 |
 | Secondary verification | 0.80 – 0.90 |
 | Review required | < 0.80 |

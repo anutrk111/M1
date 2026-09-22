@@ -1,0 +1,29 @@
+# M10 storage defaults (placeholders — no secrets in repo)
+
+[postgres]
+# url from environment only, e.g. DATABASE_URL
+url_env = "DATABASE_URL"
+
+[timescale]
+enabled = false
+# metrics hypertables when enabled
+
+[object_store]
+backend = "fixture"  # fixture | minio | s3
+bucket = "talos-artifacts"
+# credentials from environment only
+
+[object_store.keys]
+# Logical key template (not integrity identity)
+logical_template = "{batch_id}/{frame_id}/{detection_id}/{artifact_kind}"
+
+[integrity]
+hash_alg = "sha256"
+
+[retention]
+# No automatic deletion until department/legal policy formally enables it.
+automatic_delete = false
+evidence_days = 90   # example / inactive while automatic_delete = false
+
+[fixture]
+root = "./.talos-fixture-store"

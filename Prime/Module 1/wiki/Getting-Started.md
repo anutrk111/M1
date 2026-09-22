@@ -38,7 +38,7 @@ Produces schema v2.0 decision JSON with Stages 0–7 timings, visual evidence, a
 |--------|----------------|-------|
 | `talos-worker` | — / 8080 health | `run-fixture`, `serve-health` |
 | `talos-api` | 8081 | Health spine; intake in M02 |
-| `review-api` | 8082 | Health spine; review in M09 |
-| `admin-gateway` | 8083 | Health spine; admin in M12 |
+| `review-api` | 8082 | Health spine; review routes in [M09](../../Module%209/docs/pdr/M09-review-management.md) |
+| `admin-gateway` | 8083 | Health spine; admin/auth in [M12](../../Module%2012/docs/pdr/M12-auth-admin-config.md) |
 
 Health contract: `GET /healthz`, `GET /readyz`.

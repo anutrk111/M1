@@ -33,13 +33,13 @@ Talos-RS is a **hexagonal modular monorepo**. **M01 Foundation & Core** is the c
 | M03 | AI Provider Gateway | Vision / VLM APIs, cost tracking — [PDR](https://github.com/anutrk111/M1/blob/main/Prime/Module%203/docs/pdr/M03-ai-provider-gateway.md) |
 | M04 | Image Pre-Processing | Stage 0/2 quality + multi-plate rectify — [PDR](https://github.com/anutrk111/M1/blob/main/Prime/Module%204/docs/pdr/M04-image-pre-processing.md) |
 | M05 | Vision Processing | Stage 1 detect via M03 — [PDR](https://github.com/anutrk111/M1/blob/main/Prime/Module%205/docs/pdr/M05-vision-processing.md) |
-| M06 | OCR & Plate Intelligence | OCR + Indian registration grammar |
-| M07 | HSRP Analysis | IND / hologram / geometry cues |
-| M08 | Confidence & Decision | Fusion + thresholds |
-| M09 | Review Management | VERIFY / CORRECT / REJECT / UNREADABLE |
-| M10 | Storage & Data | Postgres / Timescale / MinIO |
-| M11 | Export & Reporting | CSV / XLSX |
-| M12 | Auth, Admin & Config | RBAC / MFA / settings |
+| M06 | OCR & Plate Intelligence | OCR + grammar — [PDR](https://github.com/anutrk111/M1/blob/main/Prime/Module%206/docs/pdr/M06-ocr-plate-intelligence.md) |
+| M07 | HSRP Analysis | HSRP observations — [PDR](https://github.com/anutrk111/M1/blob/main/Prime/Module%207/docs/pdr/M07-hsrp-analysis.md) |
+| M08 | Confidence & Decision | Fusion + thresholds — [PDR](https://github.com/anutrk111/M1/blob/main/Prime/Module%208/docs/pdr/M08-confidence-decision.md) |
+| M09 | Review Management | Review workflow — [PDR](https://github.com/anutrk111/M1/blob/main/Prime/Module%209/docs/pdr/M09-review-management.md) |
+| M10 | Storage & Data | Persist via ports — [PDR](https://github.com/anutrk111/M1/blob/main/Prime/Module%2010/docs/pdr/M10-storage-and-data.md) |
+| M11 | Export & Reporting | Export views — [PDR](https://github.com/anutrk111/M1/blob/main/Prime/Module%2011/docs/pdr/M11-export-and-reporting.md) |
+| M12 | Auth, Admin & Config | AuthZ / admin — [PDR](https://github.com/anutrk111/M1/blob/main/Prime/Module%2012/docs/pdr/M12-auth-admin-config.md) |
 
 ## Evidence model
 

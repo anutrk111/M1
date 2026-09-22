@@ -1,0 +1,32 @@
+# M12 auth defaults (NO SECRETS — references only)
+
+[session]
+ttl_seconds = 28800
+revoke_on_password_reset = true
+revoke_on_role_change = true
+revoke_on_account_disable = true
+revoke_on_security_admin_action = true
+
+[mfa]
+required_for_system_admin = true
+required_for_review_lead = true
+required_for_others = false
+# Recovery/reset is a privileged audited operation (not ordinary verify)
+recovery_requires_permission = "user.manage"
+
+# Authorization checks permissions, not role name string equality in APIs.
+[roles.review_officer]
+permissions = ["review.read", "review.act"]
+
+[roles.review_lead]
+permissions = ["review.read", "review.act", "review.override", "export.read", "export.audit"]
+
+[roles.export_viewer]
+permissions = ["export.read"]
+
+[roles.export_admin]
+permissions = ["export.read", "export.audit"]
+
+[roles.system_admin]
+# Intentionally NO review.act / review.override by default
+permissions = ["user.manage", "config.read", "config.write", "export.read"]

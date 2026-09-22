@@ -1,0 +1,8 @@
+# M07 HSRP defaults (starting points — not compliance claims)
+
+[hsrp]
+backend = "fixture"
+prefer_image = "api_prepared"  # api_prepared | enhanced | original_crop
+min_score_to_emit = 0.0
+# Never coerce NotObservable / Unknown into boolean false.
+allow_boolean_collapse = false

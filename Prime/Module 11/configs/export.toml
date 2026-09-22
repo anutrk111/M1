@@ -1,0 +1,16 @@
+# M11 export defaults (starting points — not SLA guarantees)
+
+[export]
+default_view = "effective"  # machine | effective | both
+default_format = "csv"      # csv | xlsx | jsonl
+max_rows_per_file = 100000
+# Deterministic ordering for reproducibility
+order_by = "batch_id,frame_id,detection_id"
+
+[availability]
+# Incomplete records must not become invisible by default
+on_reconciliation_required = "flag"  # flag | exclude | fail
+
+[manifest]
+include_sha256 = true
+schema_version = "2.0"

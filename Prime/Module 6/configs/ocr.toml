@@ -1,0 +1,14 @@
+# M06 OCR + grammar defaults (starting points — not accuracy claims)
+
+[ocr]
+backend = "fixture"
+prefer_image = "api_prepared"  # api_prepared | enhanced | original_crop
+min_hypothesis_score = 0.20
+max_hypotheses_per_plate = 5
+
+[grammar]
+enabled = true
+# Grammar always runs when enabled; high OCR confidence never bypasses it.
+strict_private_format = true
+# fail_open=false: KNOWN_INVALID / UNKNOWN_TO_REGISTRY remain visible to M08
+fail_open = false
