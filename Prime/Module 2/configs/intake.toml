@@ -1,0 +1,8 @@
+[intake]
+staging_root = "./data/staging"
+max_images_per_batch = 10000
+max_zip_bytes = 536870912
+max_image_bytes = 26214400
+fail_on_empty_batch = true
+fail_batch_on_metadata_errors = false
+allowed_extensions = ["jpg", "jpeg", "png"]
