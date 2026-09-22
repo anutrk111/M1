@@ -1,0 +1,28 @@
+# M04 preprocess defaults (starting points — not accuracy claims)
+
+[quality]
+min_width = 320
+min_height = 240
+min_score = 0.40
+max_blur_score = 0.70
+on_soft_fail = "continue"
+
+[rectification]
+top_k = 1
+crop_padding_percent = 8
+deskew = true
+perspective_correction = true
+
+[enhancement]
+contrast = true
+clahe = true
+denoise = true
+unsharp = true
+
+[api_image]
+max_edge_px = 1600
+jpeg_quality = 90
+
+[provenance]
+hash_derived_artifacts = true
+record_transform_parameters = true

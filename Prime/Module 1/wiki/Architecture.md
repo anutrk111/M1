@@ -31,7 +31,7 @@ Talos-RS is a **hexagonal modular monorepo**. **M01 Foundation & Core** is the c
 | **M01** | Foundation & Core | Types, config, errors, Stages 0–7, tracing, health, lifecycle |
 | M02 | Batch & File Intake | Folder / ZIP / upload intake — [PDR](https://github.com/anutrk111/M1/blob/main/Prime/Module%202/docs/pdr/M02-batch-and-file-intake.md) |
 | M03 | AI Provider Gateway | Vision / VLM APIs, cost tracking — [PDR](https://github.com/anutrk111/M1/blob/main/Prime/Module%203/docs/pdr/M03-ai-provider-gateway.md) |
-| M04 | Image Pre-Processing | Quality, enhance, crop |
+| M04 | Image Pre-Processing | Stage 0/2 quality + multi-plate rectify — [PDR](https://github.com/anutrk111/M1/blob/main/Prime/Module%204/docs/pdr/M04-image-pre-processing.md) |
 | M05 | Vision Processing | Vehicle / plate detection |
 | M06 | OCR & Plate Intelligence | OCR + Indian registration grammar |
 | M07 | HSRP Analysis | IND / hologram / geometry cues |
