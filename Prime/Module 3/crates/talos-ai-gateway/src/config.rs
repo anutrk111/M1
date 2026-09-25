@@ -4,7 +4,7 @@ use figment::{
 };
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 use talos_core::TalosError;
 use talos_types::AiOperation;
@@ -33,6 +33,11 @@ pub struct AiConfig {
     /// Upper bound when resolving `file://` `bytes_ref` inputs.
     #[serde(default = "default_max_request_image_bytes")]
     pub max_request_image_bytes: u64,
+    /// Directories a `file://` `bytes_ref` may resolve into (typically the M02
+    /// staging root). Paths are canonicalized before the check, so `..` and
+    /// symlinks cannot escape. Empty: every `file://` reference is refused.
+    #[serde(default)]
+    pub local_artifact_roots: Vec<PathBuf>,
     pub operations: Operations,
     #[serde(default)]
     pub providers: BTreeMap<String, ProviderConfig>,
@@ -234,6 +239,7 @@ impl AiConfig {
             circuit_breaker: BreakerConfig::default(),
             tie_breaker: TieBreakerConfig::default(),
             max_request_image_bytes: default_max_request_image_bytes(),
+            local_artifact_roots: Vec::new(),
             operations: Operations {
                 detect: fixture(),
                 ocr: fixture(),

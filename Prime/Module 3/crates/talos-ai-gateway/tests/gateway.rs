@@ -442,16 +442,122 @@ async fn request_validation_rejects_bad_inputs() {
     ));
 }
 
+fn file_req(path: impl AsRef<std::path::Path>) -> VisionRequest {
+    let mut r = req(None);
+    r.image_bytes = None;
+    r.bytes_ref = Some(format!("file://{}", path.as_ref().display()));
+    r
+}
+
+/// Gateway authorized to read only `root`, with a cost recorder to prove no egress.
+fn rooted_gateway(root: &std::path::Path) -> (AiGateway, Arc<InMemoryCostRecorder>) {
+    let mut cfg = fast_cfg();
+    cfg.local_artifact_roots = vec![root.to_path_buf()];
+    let cost = Arc::new(InMemoryCostRecorder::default());
+    (AiGateway::from_config(cfg, cost.clone()).unwrap(), cost)
+}
+
 #[tokio::test]
-async fn file_bytes_ref_is_resolved() {
+async fn file_bytes_ref_inside_authorized_root_is_resolved() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("staging");
+    std::fs::create_dir_all(root.join("batch")).unwrap();
+    let path = root.join("batch/frame 1.jpg");
+    std::fs::write(&path, [0xFF, 0xD8, 0xFF]).unwrap();
+    let (gw, _) = rooted_gateway(&root);
+    let det = gw.detect_vehicles_plates(file_req(&path)).await.unwrap();
+    assert_eq!(det.plates.len(), 1);
+}
+
+#[tokio::test]
+async fn file_bytes_ref_refused_without_configured_roots() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("frame.jpg");
     std::fs::write(&path, [0xFF, 0xD8, 0xFF]).unwrap();
     let gw = AiGateway::from_config(fast_cfg(), Arc::new(NoopCostRecorder)).unwrap();
-    let mut r = req(None);
-    r.image_bytes = None;
-    r.bytes_ref = Some(format!("file://{}", path.display()));
-    assert_eq!(gw.detect_vehicles_plates(r).await.unwrap().plates.len(), 1);
+    assert!(matches!(
+        gw.detect_vehicles_plates(file_req(&path)).await,
+        Err(TalosError::Config(_))
+    ));
+}
+
+#[tokio::test]
+async fn file_bytes_ref_outside_root_rejected_without_egress() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("staging");
+    std::fs::create_dir_all(&root).unwrap();
+    std::fs::write(root.join("ok.jpg"), [0xFF, 0xD8, 0xFF]).unwrap();
+    let secret = dir.path().join("secret.jpg");
+    std::fs::write(&secret, [0xFF, 0xD8, 0xFF]).unwrap();
+    // Sibling that shares the root's string prefix.
+    let sibling = dir.path().join("staging-evil");
+    std::fs::create_dir_all(&sibling).unwrap();
+    std::fs::write(sibling.join("x.jpg"), [0xFF, 0xD8, 0xFF]).unwrap();
+    let (gw, cost) = rooted_gateway(&root);
+
+    for (label, path) in [
+        ("absolute outside", secret.clone()),
+        ("dot-dot escape", root.join("../secret.jpg")),
+        ("prefix sibling", sibling.join("x.jpg")),
+        ("root itself", root.clone()),
+    ] {
+        let err = gw
+            .detect_vehicles_plates(file_req(&path))
+            .await
+            .unwrap_err();
+        assert!(
+            matches!(err, TalosError::Validation(_)),
+            "{label}: expected Validation, got {err:?}"
+        );
+    }
+    for path in ["/etc/passwd", "relative/frame.jpg"] {
+        let err = gw.detect_vehicles_plates(file_req(path)).await.unwrap_err();
+        assert!(
+            matches!(err, TalosError::Validation(_) | TalosError::Permanent(_)),
+            "{path}: {err:?}"
+        );
+    }
+    assert!(
+        cost.events().is_empty(),
+        "no provider call for refused refs"
+    );
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn file_bytes_ref_symlink_escape_rejected() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("staging");
+    std::fs::create_dir_all(&root).unwrap();
+    let outside = dir.path().join("outside.jpg");
+    std::fs::write(&outside, [0xFF, 0xD8, 0xFF]).unwrap();
+    std::os::unix::fs::symlink(&outside, root.join("link.jpg")).unwrap();
+    std::os::unix::fs::symlink(dir.path(), root.join("dirlink")).unwrap();
+    let (gw, cost) = rooted_gateway(&root);
+
+    for path in [root.join("link.jpg"), root.join("dirlink/outside.jpg")] {
+        let err = gw
+            .detect_vehicles_plates(file_req(&path))
+            .await
+            .unwrap_err();
+        assert!(matches!(err, TalosError::Validation(_)), "{err:?}");
+    }
+    assert!(cost.events().is_empty());
+}
+
+#[tokio::test]
+async fn file_bytes_ref_over_size_cap_rejected() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("big.jpg");
+    std::fs::write(&path, vec![0xFF; 64]).unwrap();
+    let mut cfg = fast_cfg();
+    cfg.local_artifact_roots = vec![dir.path().to_path_buf()];
+    cfg.max_request_image_bytes = 63;
+    let gw = AiGateway::from_config(cfg, Arc::new(NoopCostRecorder)).unwrap();
+    assert!(matches!(
+        gw.detect_vehicles_plates(file_req(&path)).await,
+        Err(TalosError::Validation(_))
+    ));
 }
 
 #[tokio::test(start_paused = true)]

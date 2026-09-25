@@ -39,9 +39,12 @@ fn intake_cfg(dir: &Path) -> IntakeConfig {
     }
 }
 
-fn gateway() -> (Arc<AiGateway>, Arc<InMemoryCostRecorder>) {
+/// Fixture gateway authorized to read only the M02 staging root under `dir`.
+fn gateway(dir: &Path) -> (Arc<AiGateway>, Arc<InMemoryCostRecorder>) {
     let cost = Arc::new(InMemoryCostRecorder::default());
-    let gw = AiGateway::from_config(AiConfig::fixture_defaults(), cost.clone()).unwrap();
+    let mut cfg = AiConfig::fixture_defaults();
+    cfg.local_artifact_roots = vec![intake_cfg(dir).staging_root];
+    let gw = AiGateway::from_config(cfg, cost.clone()).unwrap();
     (Arc::new(gw), cost)
 }
 
@@ -94,7 +97,7 @@ async fn folder_intake_to_gateway_detect_preserves_contracts_and_lineage() {
     assert_eq!(envelopes.len(), 2);
     let originals: HashSet<String> = [sha256_hex(&a), sha256_hex(&b)].into();
 
-    let (gw, cost) = gateway();
+    let (gw, cost) = gateway(tmp.path());
     let port: Arc<dyn VisionGateway> = gw.clone();
     for env in &envelopes {
         assert_eq!(env.schema_version, INTAKE_SCHEMA_VERSION);
@@ -158,7 +161,7 @@ async fn upload_intake_plate_ocr_and_hsrp_are_bound_to_detection_id() {
     let env = upload_one(tmp.path(), jpeg(1, 2, 3)).await;
     assert_eq!(env.source.kind, SourceKind::Upload);
 
-    let (gw, cost) = gateway();
+    let (gw, cost) = gateway(tmp.path());
     let trace = new_trace_id();
     let det = gw
         .detect_vehicles_plates(VisionRequest::for_frame(&env, trace.clone()))
@@ -216,7 +219,7 @@ async fn upload_intake_plate_ocr_and_hsrp_are_bound_to_detection_id() {
 async fn ocr_and_hsrp_without_detection_id_are_rejected_before_egress() {
     let tmp = tempfile::tempdir().unwrap();
     let env = upload_one(tmp.path(), jpeg(9, 9, 9)).await;
-    let (gw, cost) = gateway();
+    let (gw, cost) = gateway(tmp.path());
 
     let frame_req = VisionRequest::for_frame(&env, new_trace_id());
     assert!(matches!(
@@ -253,7 +256,7 @@ async fn fixture_pipeline_accepts_real_m02_envelope() {
 async fn ai_api_pipeline_with_real_gateway_fails_closed_until_m04_m05_land() {
     let tmp = tempfile::tempdir().unwrap();
     let env = upload_one(tmp.path(), jpeg(7, 7, 7)).await;
-    let (gw, _cost) = gateway();
+    let (gw, _cost) = gateway(tmp.path());
 
     let mut cases = Vec::new();
     for (stage, expected) in [

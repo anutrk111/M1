@@ -7,6 +7,10 @@
 default_mode = "fixture"
 # Upper bound when resolving file:// bytes_ref inputs.
 max_request_image_bytes = 26214400
+# Directories file:// bytes_ref may be read from (canonicalized; `..` and symlink
+# escapes are refused). Empty refuses every file:// ref. Deployments set this to the
+# M02 staging_root, e.g. TALOS__AI__LOCAL_ARTIFACT_ROOTS='["/srv/talos/staging"]'.
+local_artifact_roots = []
 
 [ai.timeouts_ms]
 detect = 10000
