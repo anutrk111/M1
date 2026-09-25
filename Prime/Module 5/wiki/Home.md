@@ -2,7 +2,7 @@
 
 **M05 — Vision Processing**
 
-Stage 1 vehicle + plate detection via M03. Talos-owned `DetectionId`. Pixel bboxes.
+Stage 1 vehicle + plate detection via M03. Talos-owned `DetectionId`. Normalized bboxes (ADR-0041).
 
 ## Links
 

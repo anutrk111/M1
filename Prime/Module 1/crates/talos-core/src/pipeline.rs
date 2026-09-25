@@ -110,7 +110,7 @@ impl FrameContext {
             TalosError::Internal("decision JSON requested before Stage 7 fusion".into())
         })?;
         Ok(DecisionJson {
-            schema_version: SCHEMA_VERSION.to_owned(),
+            schema_version: DECISION_SCHEMA_VERSION.to_owned(),
             batch_id: self.intake.batch_id.clone(),
             frame_id: self.intake.frame_id.clone(),
             plate_text: fused.plate_text.clone(),

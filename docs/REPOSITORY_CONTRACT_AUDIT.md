@@ -48,7 +48,7 @@ Classification per Phase 4 (detail in [`Prime/Module 1/docs/architecture/contrac
 | Contract | PDR source | M01 Rust (`talos-types`) | Class |
 |----------|------------|-------------------------|-------|
 | `DetectionId` | M05/M06/M07 | **Missing** | B (add shared newtype) |
-| `BoundingBox` | M05 | Present (`x,y,w,h` f32) — M05 PDR uses `u32` pixel fields | D (doc vs code field types) |
+| `BoundingBox` | M05 | Present (`x,y,w,h` f32) — M05 PDR uses `u32` pixel fields | D — **resolved at G0** (ADR-0041) |
 | `ProviderRef` | M05 | **Missing** | B |
 | `PlateDetection` / `VehicleDetection` | M05 | Generic `Detection` only | C (evolve when M05 builds) |
 | `DetectionSummary` | M05 | **Missing** | B |
@@ -56,7 +56,7 @@ Classification per Phase 4 (detail in [`Prime/Module 1/docs/architecture/contrac
 | `RectifiedPlate` | M04 | Present; **no `DetectionId`** | B (optional field) |
 | `OcrHypothesis` | M06 structured | Present as text+confidence only | C (full structure at M06) |
 | `GrammarResult` statuses | M06 VALID/… | `ok: bool` only | C |
-| HSRP ternary observability | M07 | `bool` flags on `HsrpEvidence` | D (bool vs Observed/NotObservable) |
+| HSRP ternary observability | M07 | `bool` flags on `HsrpEvidence` | D — **resolved at G0** (`CueObservation`) |
 | `MachineDecision` | M09/M11 | Closest: `FusedDecision` / `DecisionJson` | B (alias + docs) |
 | `ReviewEvent` / `ReviewedResult` | M09 | **Missing** | C |
 | `ConfigRevision` id | M12/M08 | **Missing** | B (id newtype only) |
@@ -114,7 +114,7 @@ No automated link crawler existed before this baseline (CI adds lightweight chec
 
 ## 9. ADR numbering / ownership
 
-Canonical ADRs: **0001–0040**, one file each under module `docs/adr/`. **No number collisions** in `docs/adr/`.  
+Canonical ADRs: **0001–0043** (0041–0043 added at G0), one file each under module `docs/adr/`. **No number collisions** in `docs/adr/`.
 Global index: [`Prime/ADRs.md`](../Prime/ADRs.md).
 
 ---
@@ -133,8 +133,8 @@ Global index: [`Prime/ADRs.md`](../Prime/ADRs.md).
 
 1. Shared lineage IDs (`DetectionId`) not in M01 types (addressed as safe extension in this baseline).
 2. Quality gate enum missing for Stage 0 halt semantics (safe extension).
-3. HSRP bool vs ternary — **architecture decision** before implementing M07 types in M01.
-4. BoundingBox f32 vs u32 pixel canon — decide at M05 implementation boundary.
+3. ~~HSRP bool vs ternary~~ — **RESOLVED at G0:** ternary `CueObservation` ([ADR-0042](../Prime/Module%201/docs/adr/0042-shared-contract-freeze.md), ADR-0020).
+4. ~~BoundingBox f32 vs u32 pixel canon~~ — **RESOLVED at G0:** normalized `f32` `[0,1]`, pixels derived ([ADR-0041](../Prime/Module%201/docs/adr/0041-normalized-bounding-box.md)).
 5. GitHub Wiki remote not bootstrapped (`M1.wiki.git` 404 until first UI page).
 6. Do not implement M02–M12 business logic until contracts green and CI baseline green.
 

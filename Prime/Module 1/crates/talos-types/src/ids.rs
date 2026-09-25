@@ -62,3 +62,7 @@ id_newtype!(
     ConfigRevisionId,
     "Immutable config revision fingerprint governing a decision (M12)."
 );
+id_newtype!(UserId, "Authenticated Talos user (M12).");
+id_newtype!(ReviewEventId, "Append-only review event id (M09).");
+id_newtype!(AuditEventId, "Append-only audit event id.");
+id_newtype!(ExportJobId, "Export job id (M11).");

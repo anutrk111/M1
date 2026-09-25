@@ -77,12 +77,13 @@ pub struct ProviderRef {
 
 pub struct Point2d { pub x: f32, pub y: f32 }
 
-/// Canonical original-frame pixel coordinates.
+/// Canonical normalized coordinates in [0.0, 1.0] relative to the original frame
+/// (ADR-0041). Pixel `PixelRect` is derived only at crop/render boundaries.
 pub struct BoundingBox {
-    pub x: u32,
-    pub y: u32,
-    pub width: u32,
-    pub height: u32,
+    pub x_min: f32,
+    pub y_min: f32,
+    pub x_max: f32,
+    pub y_max: f32,
 }
 
 pub type ConfidenceScore = f32; // 0.0..=1.0
@@ -124,7 +125,7 @@ pub struct Detections {
 }
 ```
 
-**BBox rules:** `width > 0`, `height > 0`, `x + width <= original_width`, `y + height <= original_height`.
+**BBox rules (ADR-0041):** finite, every value in `[0, 1]`, `x_min < x_max`, `y_min < y_max`. Provider pixel boxes are normalized with `BoundingBox::from_pixels` (which rejects out-of-frame rects).
 
 ---
 
@@ -139,7 +140,7 @@ OriginalFrame
  → External Vision Provider (or fixture)
  → Raw Provider Detections
  → Geometry Validation
- → Normalize to original-frame pixels
+ → Normalize to original-frame [0,1] coordinates
  → Score Filtering
  → Duplicate / Overlap Suppression (in-frame)
  → Talos DetectionId Assignment
@@ -156,7 +157,7 @@ OriginalFrame
 1. Prefer **M02 original frame** bytes (full scene). Do not use plate crops (they do not exist yet).
 2. May run when Stage 0 is `Degraded`; skip/halt only if Stage 0 already `Unusable`/`Halt`.
 3. Call M03 `detect_vehicles_plates` when `backend = ai_api`; else fixture.
-4. Normalize provider geometry to pixel `BoundingBox` (+ optional quad in pixel space).
+4. Normalize provider geometry to the normalized `BoundingBox` (+ optional quad in normalized space), per ADR-0041.
 5. Drop invalid geometry → count toward validation failures / exclude from accepted set.
 6. Filter by `min_plate_score` / `min_vehicle_score`.
 7. If `[suppression].enabled`, suppress overlapping same-class boxes by IoU ≥ `iou_threshold` (keep higher score).

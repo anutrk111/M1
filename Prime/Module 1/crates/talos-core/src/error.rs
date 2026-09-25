@@ -44,6 +44,12 @@ impl TalosError {
     }
 }
 
+impl From<talos_types::ContractError> for TalosError {
+    fn from(value: talos_types::ContractError) -> Self {
+        Self::Validation(value.to_string())
+    }
+}
+
 impl From<ConfigError> for TalosError {
     fn from(value: ConfigError) -> Self {
         Self::Config(value.to_string())

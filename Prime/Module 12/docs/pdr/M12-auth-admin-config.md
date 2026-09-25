@@ -37,7 +37,7 @@ M12 AuthN/AuthZ (permissions)
 | Constraint | Rule |
 |------------|------|
 | **AuthZ model** | Permission checks — not role-name string equality |
-| **system_admin** | No automatic review authority |
+| **super_admin** | No automatic review authority |
 | **Secrets** | Refs in TOML; values in env/secret manager; redacted in logs/UI |
 | **Config** | Transactional ConfigRevision; invalid → keep previous |
 | **Hot reload** | Explicit operational knobs only; secrets require restart |
@@ -48,17 +48,24 @@ M12 AuthN/AuthZ (permissions)
 
 ## 3. Roles and permissions
 
-Starter roles: `review_officer`, `review_lead`, `export_viewer`, `export_admin`, `system_admin`.
+Operational roles ([ADR-0043](../../../Module%201/docs/adr/0043-operational-roles.md), frozen in `talos_types::Role`): `super_admin`, `clerk`, `reviewing_officer`. They replace the ADR-0034 starter set as defaults.
 
-Permissions (normative set):
+| Role | Responsibility |
+|------|----------------|
+| Super Admin | Users, roles, config, providers. No automatic review authority. |
+| Clerk | Batch intake and routine review workflow. |
+| Reviewing Officer | Escalated / machine-pending / ambiguous cases only. |
+
+Permissions (normative set, `talos_types::Permission`):
 
 ```text
+intake.submit
 review.read | review.act | review.override
 export.read | export.audit
 user.manage | config.read | config.write
 ```
 
-Default maps: [`configs/auth.toml`](../../configs/auth.toml). `system_admin` defaults exclude `review.act` / `review.override`.
+Default maps: [`configs/auth.toml`](../../configs/auth.toml). `super_admin` defaults exclude `review.act` / `review.override`.
 
 ---
 
@@ -105,7 +112,7 @@ Logs / API / UI    → redacted
 
 - Secrets in committed defaults
 - Role-name hard-coding in module APIs
-- Auto-granting review to `system_admin`
+- Auto-granting review to `super_admin`
 - Half-applied config activation
 - Treating MFA recovery as ordinary verify
 
@@ -120,7 +127,7 @@ Extends `admin-gateway` (today health-only). Document routes later for user mana
 ## 8. Acceptance criteria
 
 - [ ] Permission model documented; starter role maps in config.
-- [ ] system_admin ≠ automatic review.
+- [ ] super_admin ≠ automatic review.
 - [ ] ConfigRevision transactional semantics locked.
 - [ ] Secrets / redaction / non-reloadable secrets locked.
 - [ ] Session revoke + MFA recovery policy locked.

@@ -1,0 +1,13 @@
+{
+  "batch_id": "batch-01",
+  "frame_id": "frame-01",
+  "image": "site-a/cam1/img_0001.jpg",
+  "detection_id": "det-01",
+  "plate_text": "CG04AB1284",
+  "ocr_confidence": 0.63,
+  "hsrp_status": "NOT_OBSERVABLE",
+  "machine_outcome": "REVIEW_REQUIRED",
+  "human_action": "Correct",
+  "final_status": "CORRECTED",
+  "timestamp": "2026-09-25T10:05:00Z"
+}

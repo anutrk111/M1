@@ -34,7 +34,7 @@ async fn fixture_pipeline_emits_decision_json() {
     assert_eq!(ctx.terminal_status, Some(FrameTerminalStatus::Succeeded));
 
     let json = ctx.to_decision_json().unwrap();
-    assert_eq!(json.schema_version, SCHEMA_VERSION);
+    assert_eq!(json.schema_version, DECISION_SCHEMA_VERSION);
     assert!(json.grammar_ok);
     assert_eq!(json.plate_text, "CG04AB1234");
     assert!(json.fused_confidence > 0.0);
@@ -52,7 +52,7 @@ async fn fixture_pipeline_emits_decision_json() {
     ));
 
     let encoded = serde_json::to_value(&json).unwrap();
-    assert_eq!(encoded["schema_version"], "2.0");
+    assert_eq!(encoded["schema_version"], "2.1");
     assert!(encoded.get("outcome").is_some());
 }
 
@@ -74,8 +74,10 @@ async fn not_implemented_sets_terminal_status() {
 
 #[test]
 fn indian_plate_grammar_fixture() {
-    assert!(validate_indian_plate("CG04AB1234").ok);
-    assert!(validate_indian_plate("cg-04-ab-1234").ok);
-    assert!(!validate_indian_plate("INVALID").ok);
-    assert!(!validate_indian_plate("").ok);
+    let id = DetectionId::new("d1");
+    assert!(validate_indian_plate(&id, "CG04AB1234").is_valid());
+    assert!(validate_indian_plate(&id, "cg-04-ab-1234").is_valid());
+    assert!(!validate_indian_plate(&id, "INVALID").is_valid());
+    assert!(!validate_indian_plate(&id, "").is_valid());
+    assert_eq!(validate_indian_plate(&id, "CG04AB1234").detection_id, id);
 }

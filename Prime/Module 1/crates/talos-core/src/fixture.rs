@@ -73,12 +73,7 @@ impl Stage for FixtureDetection {
         let plate = Detection {
             label: "plate".into(),
             score: 0.94,
-            bbox: BoundingBox {
-                x: 100.0,
-                y: 200.0,
-                w: 240.0,
-                h: 60.0,
-            },
+            bbox: BoundingBox::new(0.10, 0.40, 0.34, 0.46)?,
             detection_id: Some(DetectionId::new("fixture-plate-1")),
             provider: Some(ProviderRef {
                 name: "fixture".into(),
@@ -89,12 +84,7 @@ impl Stage for FixtureDetection {
             vehicles: vec![Detection {
                 label: "car".into(),
                 score: 0.91,
-                bbox: BoundingBox {
-                    x: 40.0,
-                    y: 80.0,
-                    w: 500.0,
-                    h: 360.0,
-                },
+                bbox: BoundingBox::new(0.04, 0.16, 0.54, 0.88)?,
                 detection_id: Some(DetectionId::new("fixture-vehicle-1")),
                 provider: Some(ProviderRef {
                     name: "fixture".into(),
@@ -130,27 +120,18 @@ impl Stage for FixtureRectification {
         "fixture_rectification"
     }
     async fn process(&self, ctx: &mut FrameContext) -> Result<StageStatus, TalosError> {
-        let bbox = ctx
-            .detections
-            .as_ref()
-            .and_then(|d| d.plates.first())
-            .map(|p| p.bbox.clone())
-            .unwrap_or(BoundingBox {
-                x: 0.0,
-                y: 0.0,
-                w: 1.0,
-                h: 1.0,
-            });
+        let Some(plate) = ctx.detections.as_ref().and_then(|d| d.plates.first()) else {
+            return Ok(StageStatus::SkipRemaining);
+        };
+        let detection_id = plate.detection_id.clone().ok_or_else(|| {
+            TalosError::Validation("plate detection missing DetectionId lineage".into())
+        })?;
         ctx.rectified = Some(RectifiedPlate {
-            bbox,
+            detection_id,
+            bbox: plate.bbox,
             crop_ref: format!("fixture://crop/{}", ctx.intake.frame_id),
             width: 240,
             height: 60,
-            detection_id: ctx
-                .detections
-                .as_ref()
-                .and_then(|d| d.plates.first())
-                .and_then(|p| p.detection_id.clone()),
         });
         Ok(StageStatus::Continue)
     }
@@ -166,13 +147,18 @@ impl Stage for FixtureOcr {
     }
     async fn process(&self, ctx: &mut FrameContext) -> Result<StageStatus, TalosError> {
         // Deterministic fixture plate — CG04AB1234 (Chhattisgarh-style).
+        let detection_id = rectified_lineage(ctx)?;
         let text = "CG04AB1234".to_owned();
         let confidences = vec![0.97; text.len()];
         ctx.ocr = vec![OcrHypothesis {
+            detection_id,
             text: text.clone(),
             confidence: 0.96,
             char_confidences: confidences,
-            detection_id: ctx.rectified.as_ref().and_then(|r| r.detection_id.clone()),
+            provider: Some(ProviderRef {
+                name: "fixture".into(),
+                model: None,
+            }),
         }];
         ctx.push_visual_evidence(Evidence::visual(
             "fixture.s3",
@@ -183,8 +169,15 @@ impl Stage for FixtureOcr {
     }
 }
 
+fn rectified_lineage(ctx: &FrameContext) -> Result<DetectionId, TalosError> {
+    ctx.rectified
+        .as_ref()
+        .map(|r| r.detection_id.clone())
+        .ok_or_else(|| TalosError::Validation("stage requires a RectifiedPlate lineage".into()))
+}
+
 /// Minimal Indian plate grammar for fixture spine (state + district + series + number).
-pub fn validate_indian_plate(raw: &str) -> GrammarResult {
+pub fn validate_indian_plate(detection_id: &DetectionId, raw: &str) -> GrammarResult {
     let normalized: String = raw
         .chars()
         .filter(|c| c.is_ascii_alphanumeric())
@@ -210,14 +203,18 @@ pub fn validate_indian_plate(raw: &str) -> GrammarResult {
     };
 
     GrammarResult {
+        detection_id: detection_id.clone(),
         normalized_text: normalized,
-        ok,
+        status: if ok {
+            GrammarStatus::Valid
+        } else {
+            GrammarStatus::Invalid
+        },
         errors: if ok {
             vec![]
         } else {
             vec!["does not match Indian private vehicle pattern".into()]
         },
-        detection_id: None,
     }
 }
 
@@ -230,8 +227,9 @@ impl Stage for FixtureGrammar {
         "fixture_grammar"
     }
     async fn process(&self, ctx: &mut FrameContext) -> Result<StageStatus, TalosError> {
+        let detection_id = rectified_lineage(ctx)?;
         let text = ctx.ocr.first().map(|h| h.text.as_str()).unwrap_or("");
-        let result = validate_indian_plate(text);
+        let result = validate_indian_plate(&detection_id, text);
         ctx.grammar = Some(result);
         Ok(StageStatus::Continue)
     }
@@ -246,13 +244,14 @@ impl Stage for FixtureHsrp {
         "fixture_hsrp"
     }
     async fn process(&self, ctx: &mut FrameContext) -> Result<StageStatus, TalosError> {
+        let detection_id = rectified_lineage(ctx)?;
         ctx.hsrp = Some(HsrpEvidence {
+            detection_id,
             score: 0.88,
-            ind_mark_detected: true,
-            hologram_cues: true,
-            geometry_ok: true,
+            ind_mark: CueObservation::Observed,
+            hologram: CueObservation::Observed,
+            geometry: CueObservation::Observed,
             notes: vec!["fixture".into()],
-            detection_id: ctx.rectified.as_ref().and_then(|r| r.detection_id.clone()),
         });
         ctx.push_visual_evidence(Evidence::visual(
             "fixture.s5",
@@ -290,12 +289,11 @@ impl Stage for FixtureDecision {
         "fixture_decision"
     }
     async fn process(&self, ctx: &mut FrameContext) -> Result<StageStatus, TalosError> {
-        let grammar = ctx.grammar.clone().unwrap_or(GrammarResult {
-            normalized_text: String::new(),
-            ok: false,
-            errors: vec!["missing grammar".into()],
-            detection_id: None,
-        });
+        let (plate_text, grammar_ok) = ctx
+            .grammar
+            .as_ref()
+            .map(|g| (g.normalized_text.clone(), g.is_valid()))
+            .unwrap_or_default();
         let hsrp_score = ctx.hsrp.as_ref().map(|h| h.score).unwrap_or(0.0);
         let ocr_conf = ctx.ocr.first().map(|o| o.confidence).unwrap_or(0.0);
         let det_conf = ctx
@@ -316,7 +314,7 @@ impl Stage for FixtureDecision {
         {
             hard_fail_reasons.push("no_plate".into());
         }
-        if self.decision.hard_fail_on_grammar && !grammar.ok {
+        if self.decision.hard_fail_on_grammar && !grammar_ok {
             hard_fail_reasons.push("grammar_fail".into());
         }
         let hard_fail = !hard_fail_reasons.is_empty();
@@ -326,13 +324,13 @@ impl Stage for FixtureDecision {
             + (0.25 * det_conf)
             + (0.20 * hsrp_score)
             + (0.15 * quality)
-            + (0.15 * if grammar.ok { 1.0 } else { 0.0 });
+            + (0.15 * if grammar_ok { 1.0 } else { 0.0 });
 
         let outcome = self.decision.outcome_for(fused_confidence, hard_fail);
 
         ctx.fused = Some(FusedDecision {
-            plate_text: grammar.normalized_text.clone(),
-            grammar_ok: grammar.ok,
+            plate_text,
+            grammar_ok,
             hsrp_score,
             fused_confidence,
             outcome,

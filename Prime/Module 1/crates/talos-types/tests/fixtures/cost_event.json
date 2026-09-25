@@ -1,0 +1,15 @@
+{
+  "trace_id": "trace-01",
+  "frame_id": "frame-01",
+  "batch_id": "batch-01",
+  "provider": "fixture",
+  "model": null,
+  "operation": "detect_vehicles_plates",
+  "status": "ok",
+  "latency_ms": 120,
+  "input_tokens": null,
+  "output_tokens": null,
+  "image_units": 1,
+  "usd_estimate": null,
+  "error_class": null
+}
