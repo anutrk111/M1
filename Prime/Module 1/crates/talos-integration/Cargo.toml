@@ -1,0 +1,22 @@
+[package]
+name = "talos-integration"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+description = "Cross-module integration gates (G1: M01 + M02 + M03). Test-only."
+publish = false
+
+[dependencies]
+
+[dev-dependencies]
+talos-types = { workspace = true }
+talos-config = { workspace = true }
+talos-core = { workspace = true }
+talos-intake = { workspace = true }
+talos-ai-gateway = { workspace = true }
+tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
+serde_json = { workspace = true }
+image = { workspace = true }
+tempfile = "3"
