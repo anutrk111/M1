@@ -24,7 +24,7 @@ The G1 crate is test-only (`publish = false`). It drives the real M02 intake int
 
 - **DetectionId minting (M05) and rectified crops (M04) are not implemented.** The plate-path test mints a stand-in id and uses the staged original as the crop. It proves the port carries the lineage; it does not show real rectification.
 - **An all-`ai_api` pipeline does not produce decisions yet.** It fails closed, as the last row above shows. That is the expected outcome until M04 and M05 replace the fixture stages in Wave 2.
-- **`bytes_ref` resolution covers `file://` only.** Object-store references return `NotImplemented` until M10.
+- **`bytes_ref` resolution covers `file://` only**, and since the PR #6 remediation only inside `[ai].local_artifact_roots`. The G1 tests authorize the M02 staging root explicitly. Object-store references return `NotImplemented` until M10.
 - The M03 deviations listed in `Prime/Module 3/docs/M03_IMPLEMENTATION_REPORT.md` still apply. HTTP 408 and 500 are treated as transient, and `vlm.max_fraction` enforcement belongs to M08.
 
 ## Verification (local, `Prime/`)
@@ -55,6 +55,10 @@ Per-suite counts:
 | G1 | 6 |
 
 Remote CI runs on the PR `integration/m01-m03` → `main`.
+
+## PR #6 remediation update
+
+The counts above are from the original G1 run. The remediation added one G1 test, `gateway_refuses_m02_envelope_outside_its_authorized_roots`: a gateway authorized for a different root refuses a real M02 envelope with `Validation` and records no cost event. G1 now has 7 tests. The fail-closed expectation for the all-`ai_api` pipeline is unchanged. Remediation details are in the M02 and M03 implementation reports.
 
 ## Next
 
