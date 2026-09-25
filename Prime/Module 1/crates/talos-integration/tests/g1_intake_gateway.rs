@@ -234,6 +234,24 @@ async fn ocr_and_hsrp_without_detection_id_are_rejected_before_egress() {
 }
 
 #[tokio::test]
+async fn gateway_refuses_m02_envelope_outside_its_authorized_roots() {
+    let tmp = tempfile::tempdir().unwrap();
+    let env = upload_one(tmp.path(), jpeg(4, 4, 4)).await;
+    let other = tempfile::tempdir().unwrap();
+    let cost = Arc::new(InMemoryCostRecorder::default());
+    let mut cfg = AiConfig::fixture_defaults();
+    cfg.local_artifact_roots = vec![other.path().to_path_buf()];
+    let gw = AiGateway::from_config(cfg, cost.clone()).unwrap();
+
+    let err = gw
+        .detect_vehicles_plates(VisionRequest::for_frame(&env, new_trace_id()))
+        .await
+        .unwrap_err();
+    assert!(matches!(err, TalosError::Validation(_)), "{err}");
+    assert!(cost.events().is_empty(), "nothing leaves the host");
+}
+
+#[tokio::test]
 async fn fixture_pipeline_accepts_real_m02_envelope() {
     let tmp = tempfile::tempdir().unwrap();
     let env = upload_one(tmp.path(), jpeg(5, 5, 5)).await;
