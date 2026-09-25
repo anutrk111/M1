@@ -14,11 +14,11 @@ use std::collections::HashMap;
 use std::fs::File;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use zip::ZipArchive;
 use talos_core::util::{new_batch_id, new_frame_id, sha256_hex};
 use talos_core::TalosError;
 use talos_types::{BatchId, ImageRef, IntakeEnvelope, SourceKind, SourceRef, SCHEMA_VERSION};
 use tracing::{info, warn, Instrument};
+use zip::ZipArchive;
 
 #[derive(Clone, Debug)]
 pub struct ImportResult {
@@ -102,10 +102,10 @@ impl Stager {
             .parent()
             .ok_or_else(|| TalosError::Validation("staging path has no parent".into()))?;
         std::fs::create_dir_all(parent).map_err(|e| TalosError::Transient(e.to_string()))?;
-        let root = std::fs::canonicalize(&self.root)
-            .map_err(|e| TalosError::Transient(e.to_string()))?;
-        let parent = std::fs::canonicalize(parent)
-            .map_err(|e| TalosError::Transient(e.to_string()))?;
+        let root =
+            std::fs::canonicalize(&self.root).map_err(|e| TalosError::Transient(e.to_string()))?;
+        let parent =
+            std::fs::canonicalize(parent).map_err(|e| TalosError::Transient(e.to_string()))?;
         if !parent.starts_with(&root) {
             return Err(TalosError::Validation(format!(
                 "staging path escapes the batch directory: {}",
