@@ -72,15 +72,7 @@ impl HttpJsonProvider {
         request_timeout: Duration,
     ) -> Result<Self, TalosError> {
         let name = name.into();
-        let base_url = base_url.into().trim_end_matches('/').to_owned();
-        let loopback = ["http://127.0.0.1", "http://localhost", "http://[::1]"]
-            .iter()
-            .any(|p| base_url.starts_with(p));
-        if !base_url.starts_with("https://") && !loopback {
-            return Err(TalosError::Config(format!(
-                "provider {name}: TLS required (base_url must be https://)"
-            )));
-        }
+        let base_url = validate_base_url(&name, &base_url.into())?;
         let client = reqwest::Client::builder()
             .timeout(request_timeout)
             .build()
@@ -93,6 +85,34 @@ impl HttpJsonProvider {
             client,
         })
     }
+}
+
+/// Parse and vet a provider base URL; the bearer key is sent to whatever host this names.
+///
+/// `https` is required, except plain `http` to an exact loopback host (`localhost`,
+/// `127.0.0.0/8`, `::1`) for local shims and tests. Userinfo, query and fragment are
+/// rejected. The returned string has no trailing `/`.
+pub fn validate_base_url(provider: &str, raw: &str) -> Result<String, TalosError> {
+    let bad = |why: &str| TalosError::Config(format!("provider {provider}: base_url {why}"));
+    let url = url::Url::parse(raw.trim()).map_err(|_| bad("is not a valid URL"))?;
+    if !url.username().is_empty() || url.password().is_some() {
+        return Err(bad("must not contain userinfo"));
+    }
+    if url.query().is_some() || url.fragment().is_some() {
+        return Err(bad("must not contain a query or fragment"));
+    }
+    let loopback = match url.host() {
+        Some(url::Host::Domain(d)) => d.eq_ignore_ascii_case("localhost"),
+        Some(url::Host::Ipv4(ip)) => ip.is_loopback(),
+        Some(url::Host::Ipv6(ip)) => ip.is_loopback(),
+        None => return Err(bad("must have a host")),
+    };
+    match url.scheme() {
+        "https" => {}
+        "http" if loopback => {}
+        _ => return Err(bad("must use https:// (TLS required)")),
+    }
+    Ok(url.as_str().trim_end_matches('/').to_owned())
 }
 
 /// ADR-0007 mapping. Response bodies are not included (they may echo plate text).
@@ -204,5 +224,59 @@ mod tests {
         assert!(mk("http://api.example.com").is_err());
         assert!(mk("https://api.example.com").is_ok());
         assert!(mk("http://127.0.0.1:9999").is_ok());
+    }
+
+    #[test]
+    fn exact_loopback_http_accepted() {
+        for u in [
+            "http://localhost",
+            "http://LOCALHOST:8080/",
+            "http://127.0.0.1:9999",
+            "http://127.1.2.3",
+            "http://[::1]:7000/shim",
+            "https://api.example.com/base/",
+        ] {
+            assert!(validate_base_url("p", u).is_ok(), "{u} should be accepted");
+        }
+        assert_eq!(
+            validate_base_url("p", "https://api.example.com/base/").unwrap(),
+            "https://api.example.com/base"
+        );
+    }
+
+    #[test]
+    fn loopback_lookalikes_and_malformed_rejected_as_config() {
+        for u in [
+            "http://localhost.evil.example",
+            "http://localhost.evil.example:80/v1",
+            "http://127.0.0.1.evil.example",
+            "http://example.com?host=localhost",
+            "http://example.com/#localhost",
+            "http://localhost@evil.example",
+            "http://127.0.0.1@evil.example",
+            "https://user:pw@api.example.com",
+            "http://[::2]",
+            "http://10.0.0.1",
+            "http://localhost./",
+            "ftp://localhost",
+            "file:///etc/passwd",
+            "localhost:8080",
+            "not a url",
+            "",
+        ] {
+            let err = validate_base_url("p", u).err();
+            assert!(
+                matches!(err, Some(TalosError::Config(_))),
+                "{u:?} should be a Config error, got {err:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn config_errors_do_not_echo_the_url() {
+        let err = validate_base_url("p", "http://user:sk-secret@evil.example")
+            .unwrap_err()
+            .to_string();
+        assert!(!err.contains("sk-secret"));
     }
 }

@@ -1767,6 +1767,7 @@ dependencies = [
  "tempfile",
  "tokio",
  "tracing",
+ "url",
  "wiremock",
 ]
 
@@ -1826,6 +1827,7 @@ dependencies = [
  "image",
  "serde",
  "serde_json",
+ "sha2",
  "talos-core",
  "talos-types",
  "tempfile",

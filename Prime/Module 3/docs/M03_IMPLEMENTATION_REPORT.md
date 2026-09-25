@@ -48,7 +48,7 @@ Other request rules:
 
 - Exactly one of `image_bytes` / `bytes_ref` must be set.
 - Content type must be `image/jpeg` or `image/png`.
-- `file://` refs are read, up to `max_request_image_bytes`.
+- `file://` refs are read only from `[ai].local_artifact_roots` (canonicalized; see the PR #6 remediation addendum), up to `max_request_image_bytes`. With no roots configured every `file://` ref is a `Config` error.
 - Other schemes return `NotImplemented` (object-store resolution is M10).
 
 ## Policy semantics
@@ -62,7 +62,7 @@ Other request rules:
 | Rate limit | Per-provider token bucket (`requests_per_second`, `burst`, optional per-provider override). It waits for a token, bounded by the operation timeout. |
 | Tie-breaker ("Emperor") | `run_ocr_consensus`: primary route, then the configured secondary. If the normalized top texts disagree, the arbiter is called. All hypotheses are returned with their `ProviderRef`; nothing overrides M06 grammar (ADR-0006/0019). A secondary/arbiter failure leaves its opinion `None`, never a fabricated agreement. |
 | Fixture vs live | `default_mode = "live"` rejects any fixture-kind provider in a route at boot. |
-| Secrets | An enabled `http_json` provider without a non-empty `TALOS__AI__<NAME>__API_KEY` (or `api_key_env`) is a boot-time `Config` error. `ApiKey` `Debug` output is redacted. TLS is required (`https://`), except for loopback shims/tests. |
+| Secrets | An enabled `http_json` provider without a non-empty `TALOS__AI__<NAME>__API_KEY` (or `api_key_env`) is a boot-time `Config` error. `ApiKey` `Debug` output is redacted. `base_url` is parsed as a URL: `https://` is required, plain `http://` only for an exact loopback host (`localhost`, `127.0.0.0/8`, `::1`); userinfo, query, fragment and malformed URLs are `Config` errors. |
 
 ## HTTP error mapping (ADR-0007)
 
@@ -152,6 +152,19 @@ A `CostEvent` (frozen G0 contract) is emitted on every attempt that reached a pr
   - trait-object use.
 
 No real network or paid APIs; wiremock binds loopback only.
+
+## PR #6 remediation addendum
+
+Two boundary fixes from the PR #6 review. The test counts above describe the original lane; after remediation the crate has 18 unit tests and 24 gateway tests.
+
+| Finding | Cause | Fix |
+|---------|-------|-----|
+| Plain-HTTP loopback exception | `base_url.starts_with("http://localhost")` also matched `http://localhost.evil.example`, so the bearer key could go over plaintext to a non-loopback host. | `providers::http_json::validate_base_url` parses with the `url` crate and checks the parsed host (`Domain("localhost")`, IPv4 `is_loopback`, IPv6 `is_loopback`). Userinfo (`localhost@evil.example`), query / fragment and malformed URLs are `Config`. Errors never echo the URL. |
+| Arbitrary `file://` reads | `resolve_image` read any absolute path, so a forged `VisionRequest` could upload e.g. `/etc/passwd` to a provider. | New `[ai].local_artifact_roots` (default empty = refuse). The path must be absolute; it and each root are canonicalized (resolving `..` and symlinks) and compared by whole path components, so sibling-prefix paths (`/stage-evil`) and symlink escapes fail. Outside a root or not a regular file: `Validation`, with no provider call and no cost event. Reads are capped at `max_request_image_bytes + 1`. |
+
+Deployments set `local_artifact_roots` to the M02 `staging_root` (TOML or `TALOS__AI__LOCAL_ARTIFACT_ROOTS`). Residual risk: a process that can write inside an authorized root could swap a path component between canonicalization and open; the roots should be writable only by Talos.
+
+New tests: `exact_loopback_http_accepted`, `loopback_lookalikes_and_malformed_rejected_as_config`, `config_errors_do_not_echo_the_url` (unit); `file_bytes_ref_inside_authorized_root_is_resolved`, `file_bytes_ref_refused_without_configured_roots`, `file_bytes_ref_outside_root_rejected_without_egress` (absolute outside, `..`, prefix sibling, root itself, `/etc/passwd`, relative), `file_bytes_ref_symlink_escape_rejected` (file and directory symlinks), `file_bytes_ref_over_size_cap_rejected` (integration). The earlier `file_bytes_ref_is_resolved` test became the authorized-root test.
 
 ## Deferred
 

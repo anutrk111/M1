@@ -40,11 +40,11 @@ Reused M01: `IntakeEnvelope`, `BatchId`, `FrameId`, `SourceKind`, `TalosError`, 
 
 ## Folder intake
 
-Deterministic `WalkDir` (no symlink follow), case-insensitive jpg/jpeg/png, unsupported files counted as `ignored_unsupported` (not accepted). Staging copy preserves original bytes.
+Deterministic `WalkDir` (no symlink follow), case-insensitive jpg/jpeg/png, unsupported files counted as `ignored_unsupported` (not accepted). Staging copy preserves original bytes. Since the PR #6 remediation, files are copied lazily and only after the size and batch-limit checks (see addendum).
 
 ## ZIP behavior
 
-Safe extract under `staging_root/batch_id/`; reject `..`, absolute paths, symlinks; enforce `max_zip_bytes`, `max_zip_entries`, `max_uncompressed_zip_bytes`.
+Vet the archive under `staging_root/batch_id/`: reject `..`, absolute paths, symlinks; enforce `max_zip_bytes`, `max_zip_entries`, `max_uncompressed_zip_bytes`. Since the PR #6 remediation, image entries are extracted on demand and non-image entries are counted but never extracted (see addendum).
 
 ## Metadata behavior
 
@@ -52,7 +52,7 @@ CSV + first-sheet XLSX; join relative path primary, unique basename fallback; am
 
 ## Duplicate behavior
 
-In-batch SHA-256: first `Accepted`, later `SkippedDuplicate` with `DuplicateReference.original_frame_id`. Files not deleted/mutated.
+In-batch SHA-256: first `Accepted`, later `SkippedDuplicate` with `DuplicateReference.original_frame_id`. Files not deleted/mutated. Since the PR #6 remediation, only a sink-acknowledged frame (or a prior accepted frame during recovery) can be the duplicate original.
 
 ## FrameSink
 
@@ -206,4 +206,38 @@ Unit (new): `sink` (4), `staging` (3), `upload` (2), `config::parses_staging_pol
 - HTTP multipart upload route calling `import_upload` → **M12** (`talos-api`, auth).
 - Executing `CleanupPlan` deletions → **M10 / orchestrator**.
 - Deterministic `FrameId` minting (would need an M01 contract change); recovery keys on `(relative_path, sha256)` instead.
-- ZIP uncompressed budget still trusts declared entry sizes.
+- ZIP uncompressed budget still trusts declared entry sizes. (Per-entry extraction is now capped while streaming; see the PR #6 addendum.)
+
+## PR #6 remediation addendum
+
+Fixes from the PR #6 review, verified against `integration/m01-m03` @ `78d8860`.
+
+### Pre-staging resource limits (`pipeline.rs`, `staging.rs`, `zip_safe.rs`, `upload.rs`)
+
+**Cause.** Folder intake copied every candidate into staging (`stage_copies`), and ZIP intake extracted every entry, before `run_batch` applied `max_image_bytes` or `max_images_per_batch`. An oversize file was copied and then rejected; a folder of N images with a limit of 2 staged all N. `stage_file` also held source and destination fully in memory to prove immutability.
+
+**Fix.**
+- Candidates are now `Pending` (`Source(path)`, `Bytes(upload)`, `ZipEntry(index)`) and staged inside the batch loop, after the `max_images_per_batch` check. Excess candidates are recorded as `RejectedValidation` (`max_images_per_batch exceeded`) without being copied, written, extracted, hashed or decoded. Candidate order is unchanged (sorted relative path), so recovery stays deterministic.
+- Folder files over `max_image_bytes` are rejected from `fs::metadata` before being opened; ZIP entries from their declared size; uploads from their length. Copies are also capped while streaming, so a file that grows mid-copy cannot exceed the cap.
+- Staging is bounded-memory: stream into a partial file while hashing, publish with a hard link (fails instead of overwriting), then stream-hash the destination and compare digest and length. Folder sources are re-hashed after the copy to detect a source that changed mid-copy. The in-loop re-read of the whole file is replaced by a streaming re-hash. Partial files are this run's own scratch output, never evidence.
+- ZIP: `plan_zip` vets names, symlinks, entry count and declared budget up front (batch-level `Validation`, as before) and keeps the archive open; entries are extracted one at a time. Non-image entries are counted in `ignored_unsupported` and never extracted. A repeated entry name (e.g. `a.jpg` and `./a.jpg`) is a per-frame `RejectedValidation`, never an overwrite. A corrupt entry body (CRC / decompress) is now a per-frame `RejectedValidation`, where it used to fail the whole batch; central-directory corruption still fails the batch.
+- Staging I/O failures (`Transient` / `Internal`) still abort the batch rather than being misfiled as rejections.
+- The batch tracing span is attached with `Instrument` instead of an entered guard held across `.await`, which made the intake future non-`Send`.
+
+### Sink-acknowledged duplicate authority (`pipeline.rs`)
+
+**Cause.** A fresh frame's SHA was inserted into `seen_sha` before `sink.submit`. If the submit failed, a later byte-identical file became `SkippedDuplicate` of a frame that was never accepted, leaving no accepted original.
+
+**Fix.** The SHA is inserted only on a successful sink ack (`Ok`, which includes a durable `Duplicate` ack). Recovery still seeds authority from prior `Accepted` / `SkippedAlreadyAccepted` frames and retries `FailedSink` frames with their original `FrameId`. If a later copy was accepted in the failed run, the recovery run records the earlier `FailedSink` path as `SkippedDuplicate` of that accepted frame rather than storing the content twice.
+
+### Image limit classification (`image.rs`)
+
+**Cause.** Width, height and allocation limits were passed to the decoder, and every decode error, including the decoder's `Limits` error, mapped to `Permanent`.
+
+**Fix.** Header dimensions are read first and checked against `max_width` / `max_height` / `max_pixel_count` (`Validation`). Full decode remains mandatory; a decoder `Limits` error (limits come only from config) is `Validation`, any other decode failure is `Permanent`, and decoded dimensions must equal the header's. `max_alloc` now budgets 16-bit RGBA (8 bytes per pixel).
+
+### Tests
+
+`tests/pr6_remediation.rs` (10): oversize folder file rejected before staging (not hashed, not staged, original untouched); `max_images_per_batch = 2` stages only the admitted folder, ZIP and upload candidates; ZIP oversize entry and repeated name rejected per frame; a tampered staged copy is never overwritten on recovery; a sink-failed first copy does not suppress later same content (fails on the previous logic); all-failed duplicates retry with the original `FrameId` (fails on the previous logic); width / height / pixel limits vs truncated / fake magic map to `RejectedValidation` vs `RejectedPermanent`; the intake future is `Send`. Unit: `image::classification_matrix` (valid JPEG / PNG, corrupt, truncated, width, height, pixel count, exact limits), `decoder_limit_errors_map_to_validation`, `sixteen_bit_png_within_pixel_budget_is_accepted`.
+
+talos-intake now has 67 tests: 23 unit, 13 hardening, 21 integration, 10 remediation.

@@ -7,6 +7,7 @@ use crate::providers::{ApiKey, FixtureProvider, HttpJsonProvider};
 use async_trait::async_trait;
 use serde::Serialize;
 use std::collections::BTreeMap;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use talos_core::{
@@ -254,18 +255,10 @@ impl AiGateway {
                 "bytes_ref scheme for {r:?} (object store resolution is M10)"
             )));
         };
-        let meta = tokio::fs::metadata(path)
+        let path = authorize_local_path(Path::new(path), &self.cfg.local_artifact_roots).await?;
+        read_capped(&path, self.cfg.max_request_image_bytes)
             .await
-            .map_err(|_| TalosError::Permanent(format!("bytes_ref unreadable: {r}")))?;
-        if meta.len() > self.cfg.max_request_image_bytes {
-            return Err(TalosError::Validation(
-                "image exceeds max_request_image_bytes".into(),
-            ));
-        }
-        let bytes = tokio::fs::read(path)
-            .await
-            .map_err(|_| TalosError::Permanent(format!("bytes_ref unreadable: {r}")))?;
-        Ok(Arc::new(bytes))
+            .map(Arc::new)
     }
 
     async fn attempt(&self, slot: &Slot, preq: &ProviderRequest, timeout: Duration) -> Attempt {
@@ -477,6 +470,69 @@ impl AiGateway {
             .await?;
         normalize::ocr(&pref, &det, resp.body)
     }
+}
+
+/// Canonicalize `path` (resolving `..` and symlinks) and require it to be a regular
+/// file under one of the canonicalized `roots`. `Path::starts_with` compares whole
+/// components, so `/stage-evil` is not under `/stage`. Roots that do not exist are
+/// skipped; none configured is a `Config` error.
+async fn authorize_local_path(path: &Path, roots: &[PathBuf]) -> Result<PathBuf, TalosError> {
+    if roots.is_empty() {
+        return Err(TalosError::Config(
+            "file:// bytes_ref refused: no [ai].local_artifact_roots configured".into(),
+        ));
+    }
+    if !path.is_absolute() {
+        return Err(TalosError::Validation(
+            "file:// bytes_ref must be an absolute path".into(),
+        ));
+    }
+    let canonical = tokio::fs::canonicalize(path)
+        .await
+        .map_err(|_| TalosError::Permanent("bytes_ref unreadable".into()))?;
+    let mut authorized = false;
+    for root in roots {
+        if let Ok(root) = tokio::fs::canonicalize(root).await {
+            if canonical.starts_with(&root) && canonical != root {
+                authorized = true;
+                break;
+            }
+        }
+    }
+    if !authorized {
+        return Err(TalosError::Validation(
+            "file:// bytes_ref is outside the authorized artifact roots".into(),
+        ));
+    }
+    let meta = tokio::fs::metadata(&canonical)
+        .await
+        .map_err(|_| TalosError::Permanent("bytes_ref unreadable".into()))?;
+    if !meta.is_file() {
+        return Err(TalosError::Validation(
+            "file:// bytes_ref is not a regular file".into(),
+        ));
+    }
+    Ok(canonical)
+}
+
+/// Read at most `max + 1` bytes so a file growing after the size check cannot
+/// bypass the cap.
+async fn read_capped(path: &Path, max: u64) -> Result<Vec<u8>, TalosError> {
+    use tokio::io::AsyncReadExt;
+    let file = tokio::fs::File::open(path)
+        .await
+        .map_err(|_| TalosError::Permanent("bytes_ref unreadable".into()))?;
+    let mut buf = Vec::new();
+    file.take(max.saturating_add(1))
+        .read_to_end(&mut buf)
+        .await
+        .map_err(|_| TalosError::Permanent("bytes_ref unreadable".into()))?;
+    if buf.len() as u64 > max {
+        return Err(TalosError::Validation(
+            "image exceeds max_request_image_bytes".into(),
+        ));
+    }
+    Ok(buf)
 }
 
 fn top_text(h: &[OcrHypothesis]) -> Option<String> {
