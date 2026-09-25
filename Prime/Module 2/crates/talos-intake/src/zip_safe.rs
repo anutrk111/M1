@@ -1,6 +1,6 @@
 use crate::config::IntakeConfig;
 use std::fs::{self, File};
-use std::io::{copy, Read};
+use std::io::{Read, Write};
 use std::path::{Component, Path, PathBuf};
 use talos_core::TalosError;
 use zip::ZipArchive;
@@ -71,9 +71,23 @@ pub fn extract_zip_safe(
             )));
         }
 
-        let mut outfile =
-            File::create(&out_path).map_err(|e| TalosError::Transient(e.to_string()))?;
-        copy(&mut entry, &mut outfile).map_err(|e| TalosError::Transient(e.to_string()))?;
+        if out_path.exists() {
+            // Recovery re-run (or repeated entry name): existing staged bytes must match.
+            let mut buf = Vec::with_capacity(usize::try_from(size).unwrap_or(0));
+            entry
+                .read_to_end(&mut buf)
+                .map_err(|e| TalosError::Validation(format!("corrupt ZIP entry {name}: {e}")))?;
+            let existing = fs::read(&out_path).map_err(|e| TalosError::Permanent(e.to_string()))?;
+            if existing != buf {
+                return Err(TalosError::Validation(format!(
+                    "ZIP entry {name} conflicts with existing staged bytes; refusing to overwrite"
+                )));
+            }
+        } else {
+            let mut outfile =
+                File::create(&out_path).map_err(|e| TalosError::Transient(e.to_string()))?;
+            copy_entry(&mut entry, &mut outfile, &name)?;
+        }
 
         // Verify path did not escape (after create, check canonicalize of parent)
         if let Ok(canon_out) = fs::canonicalize(&out_path) {
@@ -87,6 +101,22 @@ pub fn extract_zip_safe(
     }
 
     Ok(())
+}
+
+/// Stream an entry to disk. Read/decompress/CRC failures are corrupt input (`Validation`);
+/// write failures are staging I/O (`Transient`).
+fn copy_entry(entry: &mut impl Read, out: &mut impl Write, name: &str) -> Result<(), TalosError> {
+    let mut buf = [0u8; 64 * 1024];
+    loop {
+        let n = entry
+            .read(&mut buf)
+            .map_err(|e| TalosError::Validation(format!("corrupt ZIP entry {name}: {e}")))?;
+        if n == 0 {
+            return Ok(());
+        }
+        out.write_all(&buf[..n])
+            .map_err(|e| TalosError::Transient(e.to_string()))?;
+    }
 }
 
 /// Normalize ZIP entry name to a relative PathBuf under dest; reject traversal/absolute.

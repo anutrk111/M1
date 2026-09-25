@@ -8,7 +8,7 @@ Prime houses the foundational Talos modules.
 |--------|------|------|--------|
 | M01 | Foundation & Core | [Module 1](Module%201/) | Implemented |
 | M02 | Batch & File Intake | [Module 2](Module%202/) | **Implemented** (`talos-intake`) |
-| M03 | AI Provider Gateway | [Module 3](Module%203/) | PDR complete |
+| M03 | AI Provider Gateway | [Module 3](Module%203/) | **Implemented** (`talos-ai-gateway`) |
 | M04 | Image Pre-Processing | [Module 4](Module%204/) | PDR complete |
 | M05 | Vision Processing | [Module 5](Module%205/) | PDR complete |
 | M06 | OCR & Plate Intelligence | [Module 6](Module%206/) | PDR complete |
@@ -27,9 +27,15 @@ Canonical Cargo workspace root is this directory (`Prime/Cargo.toml`):
 cd Prime
 cargo test --workspace --all-features
 cargo clippy --workspace --all-targets --all-features -- -D warnings
+cargo test -p talos-integration   # G1 gate: M02 intake → M01 port → M03 gateway
 ```
 
+Cross-module gates live in `Module 1/crates/talos-integration` (test-only, `publish = false`).
+
 ## Cross-cutting docs
+
+- [G0 contract freeze report](../docs/G0_CONTRACT_FREEZE_REPORT.md)
+- [G1 integration report](../docs/G1_INTEGRATION_REPORT.md)
 
 - [Global ADR registry](ADRs.md)
 - [Repository contract audit](../docs/REPOSITORY_CONTRACT_AUDIT.md)

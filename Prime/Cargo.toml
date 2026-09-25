@@ -10,6 +10,8 @@ members = [
     "Module 1/apps/review-api",
     "Module 1/apps/admin-gateway",
     "Module 2/crates/talos-intake",
+    "Module 3/crates/talos-ai-gateway",
+    "Module 1/crates/talos-integration",
 ]
 default-members = [
     "Module 1/crates/talos-types",
@@ -18,6 +20,8 @@ default-members = [
     "Module 1/crates/observability",
     "Module 1/apps/talos-worker",
     "Module 2/crates/talos-intake",
+    "Module 3/crates/talos-ai-gateway",
+    "Module 1/crates/talos-integration",
 ]
 
 [workspace.package]
@@ -33,6 +37,7 @@ talos-config = { path = "Module 1/crates/talos-config" }
 talos-core = { path = "Module 1/crates/talos-core" }
 observability = { path = "Module 1/crates/observability" }
 talos-intake = { path = "Module 2/crates/talos-intake" }
+talos-ai-gateway = { path = "Module 3/crates/talos-ai-gateway" }
 
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

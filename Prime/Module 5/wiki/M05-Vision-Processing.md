@@ -9,7 +9,7 @@ Stage 1 — vehicle + plate detection on **original frame**.
 ## Locked rules
 
 - Talos-owned `DetectionId` (provider id optional)
-- Canonical pixel `BoundingBox`
+- Canonical normalized `[0,1]` `BoundingBox` (ADR-0041)
 - Multi-plate 0..N; empty success ≠ error
 - In-frame IoU **detection suppression** ≠ Stage 6 observation dedup/clustering
 - Auditable `DetectionSummary`

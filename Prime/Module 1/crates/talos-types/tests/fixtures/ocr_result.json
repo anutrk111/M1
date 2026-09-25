@@ -1,0 +1,25 @@
+{
+  "detection_id": "det-01",
+  "candidates": [
+    {
+      "detection_id": "det-01",
+      "text": "CG04AB1234",
+      "confidence": 0.96,
+      "char_confidences": [0.99, 0.98],
+      "provider": { "name": "fixture" }
+    }
+  ],
+  "selected": {
+    "detection_id": "det-01",
+    "text": "CG04AB1234",
+    "confidence": 0.96,
+    "char_confidences": [0.99, 0.98],
+    "provider": { "name": "fixture" }
+  },
+  "grammar": {
+    "detection_id": "det-01",
+    "normalized_text": "CG04AB1234",
+    "status": "VALID",
+    "errors": []
+  }
+}

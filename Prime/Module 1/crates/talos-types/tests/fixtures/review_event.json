@@ -1,0 +1,12 @@
+{
+  "review_event_id": "rev-01",
+  "batch_id": "batch-01",
+  "frame_id": "frame-01",
+  "detection_id": "det-01",
+  "actor": "user-clerk-1",
+  "role": "CLERK",
+  "action": "Correct",
+  "corrected_plate_text": "CG04AB1284",
+  "reason": "OCR misread 3 as 8",
+  "at": "2026-09-25T10:05:00Z"
+}

@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted
+Accepted. Under ADR-0043 the MFA defaults apply to `super_admin` and `reviewing_officer`.
 
 ## Context
 

@@ -45,6 +45,9 @@ Canonical Architecture Decision Records across M01–M12.
 | 0038 | Spreadsheet-Safe Serialization | M11 | Accepted | [link](Module%2011/docs/adr/0038-spreadsheet-safe-serialization.md) | No storage mutation |
 | 0039 | Permission-Based Authorization | M12 | Accepted | [link](Module%2012/docs/adr/0039-permission-based-authorization.md) | Permissions ≠ role names |
 | 0040 | Transactional Config Revision | M12 | Accepted | [link](Module%2012/docs/adr/0040-transactional-config-revision.md) | Atomic activation |
+| 0041 | Normalized BoundingBox Canon | M01 | Accepted | [link](Module%201/docs/adr/0041-normalized-bounding-box.md) | f32 [0,1]; pixels derived; supersedes 0011 item 2 |
+| 0042 | Shared Contract Freeze (G0) | M01 | Accepted | [link](Module%201/docs/adr/0042-shared-contract-freeze.md) | Frozen talos-types; required DetectionId; schema 2.1 |
+| 0043 | Three Operational Roles | M01/M12 | Accepted | [link](Module%201/docs/adr/0043-operational-roles.md) | SuperAdmin / Clerk / ReviewingOfficer; refines 0034 |
 
 ## Flags
 

@@ -8,7 +8,7 @@ use std::env;
 use std::fs;
 use std::net::SocketAddr;
 use std::path::PathBuf;
-use talos_core::fixture::fixture_pipeline;
+use talos_core::backend::build_pipeline;
 use talos_core::health::{self, Readiness};
 use talos_core::pipeline::FrameContext;
 use talos_core::runtime;
@@ -65,7 +65,9 @@ async fn run_fixture(args: &[String]) -> anyhow::Result<()> {
     let mut boot = runtime::bootstrap(&config_dir)?;
     boot.config.observability.json_logs = false;
 
-    let pipeline = fixture_pipeline(boot.config.decision.clone())?;
+    // Honors [pipeline] backends; ai_api stages need a gateway, which this
+    // offline command does not provide, so they fail closed with Config.
+    let pipeline = build_pipeline(&boot.config.pipeline, boot.config.decision.clone(), None)?;
 
     let image_bytes = b"fixture-image-bytes";
     let intake = IntakeEnvelope::new(

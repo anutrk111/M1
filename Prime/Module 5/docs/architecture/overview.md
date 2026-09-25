@@ -11,7 +11,7 @@
 ```text
 M02 OriginalFrame
  → M04 S0 Quality (Accept/Degraded)
- → M05 S1 Detection (Talos DetectionId + pixel bbox)
+ → M05 S1 Detection (Talos DetectionId + normalized bbox)
  → M04 S2 Rectify (SAME DetectionId)
  → M06 OCR + M07 HSRP
  → M08 Decision

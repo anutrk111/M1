@@ -12,3 +12,5 @@ max_width = 8192
 max_height = 8192
 max_pixel_count = 25000000
 allowed_extensions = ["jpg", "jpeg", "png"]
+# retain | plan_only | plan_batch_dir — affects plan_cleanup() output only; M02 never deletes staging.
+staging_policy = "retain"

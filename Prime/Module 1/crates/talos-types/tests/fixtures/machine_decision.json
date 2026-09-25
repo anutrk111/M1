@@ -1,0 +1,12 @@
+{
+  "batch_id": "batch-01",
+  "frame_id": "frame-01",
+  "detection_id": "det-01",
+  "outcome": "REVIEW_REQUIRED",
+  "confidence": 0.63,
+  "plate_text": "CG04AB1234",
+  "reasons": ["grammar_ambiguous", "hsrp_not_observable"],
+  "evidence_refs": ["evidence://frame-01/s3", "evidence://frame-01/s5"],
+  "config_revision_id": "cfg-rev-7",
+  "decided_at": "2026-09-25T10:00:00Z"
+}
