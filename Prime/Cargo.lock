@@ -1837,6 +1837,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "talos-integration"
+version = "0.1.0"
+dependencies = [
+ "image",
+ "serde_json",
+ "talos-ai-gateway",
+ "talos-config",
+ "talos-core",
+ "talos-intake",
+ "talos-types",
+ "tempfile",
+ "tokio",
+]
+
+[[package]]
 name = "talos-types"
 version = "0.1.0"
 dependencies = [

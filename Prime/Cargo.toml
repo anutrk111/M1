@@ -11,6 +11,7 @@ members = [
     "Module 1/apps/admin-gateway",
     "Module 2/crates/talos-intake",
     "Module 3/crates/talos-ai-gateway",
+    "Module 1/crates/talos-integration",
 ]
 default-members = [
     "Module 1/crates/talos-types",
@@ -20,6 +21,7 @@ default-members = [
     "Module 1/apps/talos-worker",
     "Module 2/crates/talos-intake",
     "Module 3/crates/talos-ai-gateway",
+    "Module 1/crates/talos-integration",
 ]
 
 [workspace.package]
