@@ -33,6 +33,26 @@ pub struct IntakeConfig {
     /// Decode-time pixel budget (`width * height`).
     #[serde(default = "default_max_pixel_count")]
     pub max_pixel_count: u64,
+    /// What [`plan_cleanup`](crate::plan_cleanup) may propose. M02 never deletes staging.
+    #[serde(default)]
+    pub staging_policy: StagingPolicy,
+}
+
+/// Staging lifecycle policy. Only affects the **plan** returned by
+/// [`plan_cleanup`](crate::plan_cleanup); executing deletions belongs to M10 / orchestrator.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum StagingPolicy {
+    /// Keep everything; the plan is always empty.
+    #[default]
+    Retain,
+    /// Propose staged copies of frames no envelope references
+    /// (`RejectedValidation`, `RejectedPermanent`, `SkippedDuplicate`).
+    PlanOnly,
+    /// Propose the whole `staging_root/<batch_id>/` directory. The executor must first
+    /// confirm accepted bytes are durably persisted elsewhere (M10), since accepted
+    /// envelopes' `bytes_ref` point into this directory.
+    PlanBatchDir,
 }
 
 fn default_max_uncompressed_zip_bytes() -> u64 {
@@ -75,6 +95,7 @@ impl Default for IntakeConfig {
             max_width: default_max_width(),
             max_height: default_max_height(),
             max_pixel_count: default_max_pixel_count(),
+            staging_policy: StagingPolicy::default(),
         }
     }
 }
@@ -137,5 +158,18 @@ allowed_extensions = ["jpg", "png"]
         assert_eq!(cfg.max_pixel_count, 25_000_000);
         assert!(cfg.extension_allowed("JPG"));
         assert!(!cfg.extension_allowed("gif"));
+        assert_eq!(cfg.staging_policy, StagingPolicy::Retain);
+    }
+
+    #[test]
+    fn parses_staging_policy() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("intake.toml"),
+            "[intake]\nstaging_policy = \"plan_only\"\n",
+        )
+        .unwrap();
+        let cfg = load_intake_config(Some(dir.path())).unwrap();
+        assert_eq!(cfg.staging_policy, StagingPolicy::PlanOnly);
     }
 }

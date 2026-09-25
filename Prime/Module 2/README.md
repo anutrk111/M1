@@ -8,8 +8,8 @@ Turns folders / ZIP archives (+ optional CSV/XLSX sidecars) into M01 `IntakeEnve
 |-------|--------|
 | PDR / ADRs / configs / wiki | Complete |
 | Rust crate `talos-intake` | **Implemented** (Prime workspace member) |
-| HTTP upload API | Deferred (same rules apply when wired) |
-| Durable queue sink | `NotImplemented` until queue module |
+| Upload intake (library `import_upload`) | Implemented; HTTP route deferred to M12 |
+| Durable sink boundary (`DurableSink`, in-memory) | Implemented; real queue backend deferred to M10 |
 
 ## Crate
 
@@ -27,15 +27,18 @@ cargo test --workspace --all-features
 
 ## Public API (summary)
 
-- `import_folder` / `import_zip` → `ImportResult { manifest, outcome }`
+- `import_folder` / `import_zip` / `import_upload(Vec<UploadedFile>, …)` → `ImportResult { manifest, outcome }`
+- `import_source(IntakeSource, …, Option<&RecoveryContext>)` — shared entry point; recovery re-run for an existing batch (`RecoveryContext::from_manifest`, keyed on `(relative_path, sha256)`)
 - `BatchOutcome` — `Complete` | `PartialFailure` | `Rejected` (empty prefer `Err`)
 - `FrameSink` + `InMemoryFrameSink`
-- `BatchManifest` with reconciled `BatchCounts` accounting
+- `DurableSink` (`offer(envelope, IdempotencyKey) -> Result<SinkAck, TalosError>`) + `InMemoryDurableSink`, `UnconfiguredDurableSink`, `DurableSinkAdapter<D>: FrameSink`
+- `BatchManifest` with reconciled `BatchCounts` accounting (incl. `skipped_already_accepted`)
+- `StagingPolicy` + pure `plan_cleanup(manifest, staging_root, policy) -> CleanupPlan`
 - `load_intake_config` ← `configs/intake.toml`
 
 ## Staging lifecycle
 
-M02 owns staging under `staging_root/<batch_id>/` for the duration of intake (copies / ZIP extract). **Cleanup is deferred** to the orchestrator / M10 — intake does not delete staging after a successful batch.
+M02 owns staging under `staging_root/<batch_id>/` for the duration of intake (copies / ZIP extract / uploads). **Cleanup is deferred** to the orchestrator / M10 — intake never deletes staging. `plan_cleanup` only reports what *would* be deleted under `staging_policy` (`retain` default | `plan_only` | `plan_batch_dir`).
 
 ## Contents
 
