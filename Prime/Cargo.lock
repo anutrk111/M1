@@ -1827,6 +1827,7 @@ dependencies = [
  "image",
  "serde",
  "serde_json",
+ "sha2",
  "talos-core",
  "talos-types",
  "tempfile",

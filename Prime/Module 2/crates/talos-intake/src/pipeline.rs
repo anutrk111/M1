@@ -1,22 +1,24 @@
 use crate::config::IntakeConfig;
-use crate::discover::{basename_of, discover_images, DiscoveredFile};
+use crate::discover::{basename_of, discover_images};
 use crate::image::validate_image;
 use crate::metadata::MetadataIndex;
 use crate::recovery::{RecoveryContext, RecoveryKey};
 use crate::sink::FrameSink;
-use crate::staging::stage_file;
+use crate::staging::{hash_file, stage_bytes, stage_file, stage_reader, too_large, Staged};
 use crate::types::{
     BatchCounts, BatchManifest, BatchOutcome, DuplicateReference, FrameRecord, IntakeStatus,
 };
 use crate::upload::{stage_uploads, UploadedFile};
-use crate::zip_safe::{extract_zip_safe, read_file_capped};
+use crate::zip_safe::{plan_zip, read_file_capped};
 use std::collections::HashMap;
+use std::fs::File;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use zip::ZipArchive;
 use talos_core::util::{new_batch_id, new_frame_id, sha256_hex};
 use talos_core::TalosError;
 use talos_types::{BatchId, ImageRef, IntakeEnvelope, SourceKind, SourceRef, SCHEMA_VERSION};
-use tracing::{info, warn};
+use tracing::{info, warn, Instrument};
 
 #[derive(Clone, Debug)]
 pub struct ImportResult {
@@ -43,15 +45,75 @@ impl IntakeSource {
     }
 }
 
-/// An image candidate after staging (or rejected before it could be staged).
+/// An image candidate, not yet staged (or rejected before it could be).
 pub(crate) struct Candidate {
     pub relative: String,
     pub state: CandidateState,
 }
 
 pub(crate) enum CandidateState {
-    Staged(PathBuf),
+    Pending(Pending),
     Rejected(TalosError),
+}
+
+/// Where a candidate's bytes come from. Staging happens inside the batch loop, only
+/// after the `max_images_per_batch` check, so excess candidates cost no disk I/O.
+pub(crate) enum Pending {
+    /// Folder file (copied with streaming verification).
+    Source(PathBuf),
+    /// Upload bytes already in memory.
+    Bytes(Vec<u8>),
+    /// Index into the vetted archive held by [`Stager`].
+    ZipEntry(usize),
+}
+
+/// Materializes pending candidates under `staging_root/<batch_id>/`.
+struct Stager {
+    root: PathBuf,
+    zip: Option<ZipArchive<File>>,
+    max_image_bytes: u64,
+}
+
+impl Stager {
+    fn stage(&mut self, relative: &str, pending: Pending) -> Result<Staged, TalosError> {
+        let dest = self.root.join(relative);
+        self.confine(&dest)?;
+        match pending {
+            Pending::Source(src) => stage_file(&src, &dest, self.max_image_bytes),
+            Pending::Bytes(bytes) => stage_bytes(&dest, &bytes, self.max_image_bytes),
+            Pending::ZipEntry(index) => {
+                let archive = self.zip.as_mut().ok_or_else(|| {
+                    TalosError::Internal("ZIP candidate without an open archive".into())
+                })?;
+                let mut entry = archive
+                    .by_index(index)
+                    .map_err(|e| TalosError::Validation(format!("ZIP entry {relative}: {e}")))?;
+                if entry.size() > self.max_image_bytes {
+                    return Err(too_large(entry.size(), self.max_image_bytes));
+                }
+                stage_reader(&dest, &mut entry, self.max_image_bytes)
+            }
+        }
+    }
+
+    /// Defense in depth: the destination's parent must resolve inside the batch dir.
+    fn confine(&self, dest: &Path) -> Result<(), TalosError> {
+        let parent = dest
+            .parent()
+            .ok_or_else(|| TalosError::Validation("staging path has no parent".into()))?;
+        std::fs::create_dir_all(parent).map_err(|e| TalosError::Transient(e.to_string()))?;
+        let root = std::fs::canonicalize(&self.root)
+            .map_err(|e| TalosError::Transient(e.to_string()))?;
+        let parent = std::fs::canonicalize(parent)
+            .map_err(|e| TalosError::Transient(e.to_string()))?;
+        if !parent.starts_with(&root) {
+            return Err(TalosError::Validation(format!(
+                "staging path escapes the batch directory: {}",
+                dest.display()
+            )));
+        }
+        Ok(())
+    }
 }
 
 /// Import a folder of images (no continuous watching).
@@ -133,32 +195,43 @@ pub async fn import_source(
     };
     let staging = config.staging_root.join(batch_id.as_str());
 
+    let mut zip = None;
     let (path_or_key, candidates, ignored, filesystem_entries_seen) = match source {
         IntakeSource::Folder(root) => {
-            std::fs::create_dir_all(&staging).map_err(|e| TalosError::Transient(e.to_string()))?;
             let (found, ignored, seen) =
                 discover_images(&root, config).map_err(TalosError::Validation)?;
-            let staged = stage_copies(&found, &staging)?;
-            (root.display().to_string(), staged, ignored, seen)
+            let candidates = found
+                .into_iter()
+                .map(|f| Candidate {
+                    relative: f.relative,
+                    state: CandidateState::Pending(Pending::Source(f.absolute)),
+                })
+                .collect();
+            (root.display().to_string(), candidates, ignored, seen)
         }
         IntakeSource::Zip(zip_path) => {
-            extract_zip_safe(&zip_path, &staging, config)?;
-            let (found, ignored, seen) =
-                discover_images(&staging, config).map_err(TalosError::Validation)?;
+            let plan = plan_zip(&zip_path, config)?;
+            zip = Some(plan.archive);
             (
                 zip_path.display().to_string(),
-                found.into_iter().map(staged_candidate).collect(),
-                ignored,
-                seen,
+                plan.candidates,
+                plan.ignored_unsupported,
+                plan.filesystem_entries_seen,
             )
         }
         IntakeSource::Upload(files) => {
-            std::fs::create_dir_all(&staging).map_err(|e| TalosError::Transient(e.to_string()))?;
-            let (candidates, ignored, seen) = stage_uploads(files, &staging, config)?;
+            let (candidates, ignored, seen) = stage_uploads(files, config)?;
             ("upload".to_owned(), candidates, ignored, seen)
         }
     };
+    std::fs::create_dir_all(&staging).map_err(|e| TalosError::Transient(e.to_string()))?;
+    let stager = Stager {
+        root: staging,
+        zip,
+        max_image_bytes: config.max_image_bytes,
+    };
 
+    let span = tracing::info_span!("batch.run", batch_id = %batch_id);
     run_batch(
         BatchSetup {
             batch_id,
@@ -168,35 +241,14 @@ pub async fn import_source(
             filesystem_entries_seen,
         },
         candidates,
+        stager,
         config,
         sink,
         metadata_path,
         recovery,
     )
+    .instrument(span)
     .await
-}
-
-fn staged_candidate(file: DiscoveredFile) -> Candidate {
-    Candidate {
-        relative: file.relative,
-        state: CandidateState::Staged(file.absolute),
-    }
-}
-
-fn stage_copies(
-    candidates: &[DiscoveredFile],
-    staging: &Path,
-) -> Result<Vec<Candidate>, TalosError> {
-    let mut out = Vec::with_capacity(candidates.len());
-    for c in candidates {
-        let dest = staging.join(&c.relative);
-        stage_file(&c.absolute, &dest)?;
-        out.push(Candidate {
-            relative: c.relative.clone(),
-            state: CandidateState::Staged(dest),
-        });
-    }
-    Ok(out)
 }
 
 fn batch_outcome(counts: &BatchCounts) -> BatchOutcome {
@@ -234,6 +286,7 @@ fn rejected_record(relative: &str, err: &TalosError) -> FrameRecord {
 async fn run_batch(
     setup: BatchSetup,
     candidates: Vec<Candidate>,
+    mut stager: Stager,
     config: &IntakeConfig,
     sink: Arc<dyn FrameSink>,
     metadata_path: Option<&Path>,
@@ -246,7 +299,6 @@ async fn run_batch(
         ignored_unsupported,
         filesystem_entries_seen,
     } = setup;
-    let _span = tracing::info_span!("batch.run", batch_id = %batch_id).entered();
     info!(%batch_id, recovery = recovery.is_some(), "batch_started");
 
     let mut meta_index = if let Some(mp) = metadata_path {
@@ -289,21 +341,23 @@ async fn run_batch(
     // Accepted in this run + already accepted by a prior run of this batch.
     let mut accepted_unique = 0u32;
 
-    for candidate in &candidates {
+    for candidate in candidates {
         let relative = candidate.relative.as_str();
         info!(relative_path = %relative, "file_discovered");
 
-        let path = match &candidate.state {
-            CandidateState::Staged(p) => p,
+        let pending = match candidate.state {
+            CandidateState::Pending(p) => p,
             CandidateState::Rejected(e) => {
                 warn!(error = %e, relative_path = %relative, "file_rejected");
-                frames.push(rejected_record(relative, e));
+                frames.push(rejected_record(relative, &e));
                 counts.rejected = counts.rejected.saturating_add(1);
                 errors.push(format!("{relative}: {e}"));
                 continue;
             }
         };
 
+        // Checked before staging: excess candidates are recorded but never copied,
+        // extracted, hashed or decoded.
         if accepted_unique >= config.max_images_per_batch {
             frames.push(FrameRecord {
                 frame_id: None,
@@ -318,6 +372,20 @@ async fn run_batch(
             continue;
         }
 
+        // Oversize is rejected here from metadata / declared size, before any copy.
+        let staged = match stager.stage(relative, pending) {
+            Ok(s) => s,
+            Err(e @ (TalosError::Validation(_) | TalosError::Permanent(_))) => {
+                warn!(error = %e, relative_path = %relative, "file_rejected");
+                frames.push(rejected_record(relative, &e));
+                counts.rejected = counts.rejected.saturating_add(1);
+                errors.push(format!("{relative}: {e}"));
+                continue;
+            }
+            Err(e) => return Err(e),
+        };
+        let path = &staged.path;
+
         let bytes = match read_file_capped(path, config.max_image_bytes) {
             Ok(b) => b,
             Err(e) => {
@@ -331,6 +399,11 @@ async fn run_batch(
 
         // SHA-256 over ORIGINAL bytes (no mutation / re-encode)
         let sha = sha256_hex(&bytes);
+        if sha != staged.sha256 || bytes.len() as u64 != staged.len {
+            return Err(TalosError::Internal(
+                "staged bytes changed after staging".into(),
+            ));
+        }
         let key = RecoveryKey::new(relative, sha.clone());
 
         if let Some(prior_id) = recovery.and_then(|ctx| ctx.accepted_frame(&key)) {
@@ -363,15 +436,11 @@ async fn run_batch(
             }
         };
 
-        // Prove immutability: re-read file and compare
-        let again = std::fs::read(path).map_err(|e| TalosError::Permanent(e.to_string()))?;
-        if again != bytes {
+        // Prove the staged evidence did not change while it was validated (streamed).
+        if hash_file(path, config.max_image_bytes)? != (sha.clone(), staged.len) {
             return Err(TalosError::Internal(
                 "file bytes changed during intake".into(),
             ));
-        }
-        if sha256_hex(&again) != sha {
-            return Err(TalosError::Internal("SHA-256 mismatch on re-hash".into()));
         }
 
         if let Some(orig) = seen_sha.get(&sha) {

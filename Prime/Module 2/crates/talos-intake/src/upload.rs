@@ -1,8 +1,8 @@
 //! Library-level upload intake: in-memory files → staging → shared batch pipeline.
 
 use crate::config::IntakeConfig;
-use crate::pipeline::{Candidate, CandidateState};
-use crate::staging::stage_bytes;
+use crate::pipeline::{Candidate, CandidateState, Pending};
+use crate::staging::too_large;
 use crate::zip_safe::safe_zip_relative_path;
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
@@ -82,13 +82,12 @@ fn extension_of(name: &str) -> String {
         .to_ascii_lowercase()
 }
 
-/// Validate names, persist accepted-extension uploads under `staging`, and return
-/// `(candidates, ignored_unsupported, filesystem_entries_seen)` — the same shape as
-/// folder discovery. Unsafe, duplicate-path and oversize uploads become pre-rejected
-/// candidates (never written to disk).
+/// Validate names and return `(candidates, ignored_unsupported, filesystem_entries_seen)`
+/// — the same shape as folder discovery. Nothing is written here: the batch loop stages
+/// each pending upload only once it is within `max_images_per_batch`. Unsafe,
+/// duplicate-path and oversize uploads become pre-rejected candidates.
 pub(crate) fn stage_uploads(
     files: Vec<UploadedFile>,
-    staging: &Path,
     config: &IntakeConfig,
 ) -> Result<(Vec<Candidate>, u32, u32), TalosError> {
     let seen = u32::try_from(files.len()).unwrap_or(u32::MAX);
@@ -123,19 +122,14 @@ pub(crate) fn stage_uploads(
         let len = file.bytes.len() as u64;
         if len > config.max_image_bytes {
             candidates.push(Candidate {
-                relative: rel.clone(),
-                state: CandidateState::Rejected(TalosError::Validation(format!(
-                    "file exceeds max_image_bytes ({len} > {}): {rel}",
-                    config.max_image_bytes
-                ))),
+                relative: rel,
+                state: CandidateState::Rejected(too_large(len, config.max_image_bytes)),
             });
             continue;
         }
-        let dest = staging.join(&rel);
-        stage_bytes(&dest, &file.bytes)?;
         candidates.push(Candidate {
             relative: rel,
-            state: CandidateState::Staged(dest),
+            state: CandidateState::Pending(Pending::Bytes(file.bytes)),
         });
     }
 

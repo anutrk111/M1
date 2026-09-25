@@ -19,6 +19,7 @@ tracing = { workspace = true }
 chrono = { workspace = true }
 figment = { workspace = true }
 image = { workspace = true }
+sha2 = { workspace = true }
 walkdir = "2"
 zip = { version = "2", default-features = false, features = ["deflate"] }
 csv = "1"
