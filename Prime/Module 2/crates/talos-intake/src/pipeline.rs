@@ -323,6 +323,8 @@ async fn run_batch(
 
     let image_candidates_discovered = u32::try_from(candidates.len()).unwrap_or(u32::MAX);
     let mut frames = Vec::new();
+    // Duplicate authority: only content a sink has acknowledged (this run or a prior
+    // run of this batch). A FailedSink frame never makes later same-SHA files skip.
     let mut seen_sha: HashMap<String, talos_types::FrameId> = recovery
         .map(RecoveryContext::accepted_by_sha)
         .unwrap_or_default();
@@ -465,7 +467,6 @@ async fn run_batch(
             .and_then(|ctx| ctx.retry_frame(&key))
             .cloned()
             .unwrap_or_else(new_frame_id);
-        seen_sha.insert(sha.clone(), frame_id.clone());
 
         let mut metadata = talos_types::FrameMetadata::default();
         if let Some(ref mut idx) = meta_index {
@@ -500,6 +501,7 @@ async fn run_batch(
         match sink.submit(envelope.clone()).await {
             Ok(()) => {
                 info!(frame_id = %frame_id, relative_path = %relative, "frame_accepted");
+                seen_sha.insert(sha.clone(), frame_id.clone());
                 accepted_unique = accepted_unique.saturating_add(1);
                 counts.accepted = counts.accepted.saturating_add(1);
                 frames.push(FrameRecord {
