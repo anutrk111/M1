@@ -482,6 +482,7 @@ fn loads_repo_intake_toml() {
     assert_eq!(cfg.max_height, 8192);
     assert_eq!(cfg.max_pixel_count, 25_000_000);
     assert!(!cfg.fail_batch_on_sink_errors);
+    assert_eq!(cfg.staging_policy, talos_intake::StagingPolicy::Retain);
 }
 
 #[test]

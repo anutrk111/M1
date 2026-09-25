@@ -10,6 +10,9 @@ pub enum IntakeStatus {
     RejectedPermanent,
     SkippedDuplicate,
     FailedSink,
+    /// Recovery re-run only: `(relative_path, sha256)` was already accepted by a prior
+    /// run of the same batch; not re-emitted to the sink. `frame_id` is the prior id.
+    SkippedAlreadyAccepted,
 }
 
 /// Batch-level outcome after intake finishes (or rejects the batch).
@@ -72,6 +75,10 @@ pub struct BatchCounts {
     /// is not in `allowed_extensions`, it is counted here. Sidecars **outside** the root
     /// are not walked and therefore not counted.
     pub ignored_unsupported: u32,
+    /// Recovery re-run only: candidates whose `(relative_path, sha256)` a prior run of the
+    /// same batch already accepted. Defaults to 0 for manifests written before this field.
+    #[serde(default)]
+    pub skipped_already_accepted: u32,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -86,17 +93,21 @@ pub struct BatchManifest {
 }
 
 impl BatchManifest {
+    /// ```text
+    /// image_candidates_discovered == accepted + rejected + skipped_duplicate
+    ///                                + failed_sink + skipped_already_accepted
+    /// filesystem_entries_seen     == image_candidates_discovered + ignored_unsupported
+    /// ```
     pub fn reconcile_ok(&self) -> bool {
-        let accounted = self.counts.accepted
-            + self.counts.rejected
-            + self.counts.skipped_duplicate
-            + self.counts.failed_sink;
-        self.counts.image_candidates_discovered == accounted
-            && self.counts.filesystem_entries_seen
-                == self
-                    .counts
-                    .image_candidates_discovered
-                    .saturating_add(self.counts.ignored_unsupported)
+        let c = &self.counts;
+        let accounted = u64::from(c.accepted)
+            + u64::from(c.rejected)
+            + u64::from(c.skipped_duplicate)
+            + u64::from(c.failed_sink)
+            + u64::from(c.skipped_already_accepted);
+        u64::from(c.image_candidates_discovered) == accounted
+            && u64::from(c.filesystem_entries_seen)
+                == u64::from(c.image_candidates_discovered) + u64::from(c.ignored_unsupported)
     }
 }
 
