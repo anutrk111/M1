@@ -22,6 +22,8 @@ M05–M08 need consistent retry behavior. M01 defines `TalosError` classes; M03 
 
 Failover to the next configured provider occurs only after retries are exhausted on `Transient` errors.
 
+Implementation note (M03): `408` and generic `500` are also treated as `Transient`. `413`, `415` and `422` map to `Validation`. Any other status maps to `Permanent`. Malformed 2xx bodies map to `Permanent`.
+
 ## Consequences
 
 - Workers can rely on `TalosError::is_retryable()` without parsing HTTP codes.

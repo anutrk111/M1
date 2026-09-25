@@ -100,7 +100,11 @@ M03 does **not** orchestrate Stages 0–7, own Indian plate grammar, set decisio
 
 ## 5. Crate and app mapping (implementation binding)
 
-Documented now; **not built in this PDR-only step**.
+**Implemented** (see [M03_IMPLEMENTATION_REPORT.md](../M03_IMPLEMENTATION_REPORT.md)). Deviations from this PDR:
+
+- The section 6 traits and request types live in `talos_core::ports` (M01 port), re-exported by M03, so M01 stages can hold `Arc<dyn VisionGateway>` without a crate cycle.
+- `VisionRequest.detection_id` was added; it is required for OCR/HSRP (G0 lineage).
+- Vendor adapters are not bundled; `fixture` + generic `http_json` ship instead.
 
 | Concern | Future location |
 |---------|-----------------|
