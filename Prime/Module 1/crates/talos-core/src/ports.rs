@@ -4,7 +4,8 @@
 use crate::error::TalosError;
 use async_trait::async_trait;
 use talos_types::{
-    BatchId, DetectionId, Detections, Evidence, FrameId, HsrpEvidence, OcrHypothesis, TraceId,
+    BatchId, DetectionId, Detections, Evidence, FrameId, HsrpEvidence, IntakeEnvelope,
+    OcrHypothesis, RectifiedPlate, TraceId,
 };
 
 /// Image input for a remote vision call. Exactly one of `image_bytes` /
@@ -22,6 +23,28 @@ pub struct VisionRequest {
 }
 
 impl VisionRequest {
+    /// Full original frame from an M02 envelope (detection input).
+    pub fn for_frame(intake: &IntakeEnvelope, trace_id: TraceId) -> Self {
+        Self {
+            trace_id,
+            frame_id: intake.frame_id.clone(),
+            batch_id: intake.batch_id.clone(),
+            detection_id: None,
+            image_bytes: None,
+            bytes_ref: Some(intake.image.bytes_ref.clone()),
+            content_type: intake.image.content_type.clone(),
+        }
+    }
+
+    /// Rectified plate crop bound to its `DetectionId` (OCR / HSRP input).
+    pub fn for_plate(intake: &IntakeEnvelope, trace_id: TraceId, plate: &RectifiedPlate) -> Self {
+        Self {
+            detection_id: Some(plate.detection_id.clone()),
+            bytes_ref: Some(plate.crop_ref.clone()),
+            ..Self::for_frame(intake, trace_id)
+        }
+    }
+
     pub fn validate(&self) -> Result<(), TalosError> {
         match (&self.image_bytes, &self.bytes_ref) {
             (Some(_), Some(_)) | (None, None) => {

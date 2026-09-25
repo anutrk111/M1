@@ -2,6 +2,7 @@
 //!
 //! See `docs/pdr/M01-foundation-and-core.md`.
 
+pub mod backend;
 pub mod error;
 pub mod fixture;
 pub mod health;
