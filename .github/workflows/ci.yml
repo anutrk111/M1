@@ -2,13 +2,13 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, "integration/**", "impl/**", "release/**"]
   pull_request:
-    branches: [main]
+    branches: [main, "integration/**", "release/**"]
 
 jobs:
   rust:
-    name: Rust workspace (M01 + M02)
+    name: Rust workspace (Prime)
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -18,6 +18,8 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
+      - name: cargo metadata (workspace resolution)
+        run: cargo metadata --no-deps --format-version 1 > /dev/null
       - name: cargo fmt
         run: cargo fmt --all -- --check
       - name: cargo clippy

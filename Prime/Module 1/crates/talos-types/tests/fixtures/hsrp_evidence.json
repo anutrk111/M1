@@ -1,0 +1,8 @@
+{
+  "detection_id": "det-01",
+  "score": 0.71,
+  "ind_mark": "OBSERVED",
+  "hologram": "NOT_OBSERVABLE",
+  "geometry": "NOT_OBSERVED",
+  "notes": ["hologram region occluded"]
+}

@@ -126,7 +126,7 @@ pub struct TransformStep {
 
 pub struct RectifiedPlate {
     pub detection_id: DetectionId,
-    pub source_bbox: BoundingBox,
+    pub source_bbox: BoundingBox, // normalized [0,1] (ADR-0041)
 
     pub original_crop_ref: String,           // BytesRef / file://…
     pub enhanced_crop_ref: Option<String>,
@@ -217,7 +217,7 @@ Decode integrity, width/height vs `min_width`/`min_height`, blur score, exposure
 
 ### 8.3 Per-plate pipeline (order fixed)
 
-1. Validate bbox (in-bounds, min size)
+1. Validate the normalized bbox (ADR-0041), derive `PixelRect` via `to_pixel_rect(original_width, original_height)`, check min size
 2. Add safe padding (`crop_padding_percent`)
 3. **Original plate crop** → `original_crop_ref` + `crop_sha256`
 4. Perspective / deskew (if enabled)

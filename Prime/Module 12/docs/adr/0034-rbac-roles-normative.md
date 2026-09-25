@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted
+Accepted; default role set refined by [ADR-0043](../../../Module%201/docs/adr/0043-operational-roles.md) (`super_admin`, `clerk`, `reviewing_officer`). Items 2–3 still apply.
 
 ## Context
 

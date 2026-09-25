@@ -11,7 +11,7 @@ Lineage from detection through rectification and OCR/HSRP must not break when pr
 ## Decision
 
 1. **Talos-owned `DetectionId`** for every accepted vehicle/plate; `provider_detection_id` optional provenance only.
-2. Output geometry is **original-frame pixel** `BoundingBox` (`x,y,width,height` with in-bounds rules). Normalize at M03/M05 boundary so M04 never sees provider-normalized coords.
+2. ~~Output geometry is original-frame pixel `BoundingBox`.~~ **Superseded by [ADR-0041](../../../Module%201/docs/adr/0041-normalized-bounding-box.md):** canonical geometry is normalized `[0,1]` relative to the original frame; pixels are derived at crop/render boundaries only.
 3. Support **0..N** plates; architecture not locked to a single best plate.
 4. Optional `associated_vehicle_id` is spatial only; never drop a valid plate solely for missing association.
 5. In-frame **detection suppression** (`[suppression]` IoU) ≠ M08 Stage 6 **observation deduplication / clustering**.

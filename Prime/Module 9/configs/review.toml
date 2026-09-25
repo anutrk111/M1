@@ -12,5 +12,6 @@ require_version = true
 
 [review.roles]
 # Requirements for M12 — not implemented here
-officer = "review_officer"
-lead = "review_lead"
+# Operational roles per ADR-0043 (talos_types::Role)
+routine = "clerk"
+escalation = "reviewing_officer"
